@@ -1,18 +1,37 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
-const lichhenSchema = new mongoose.Schema({
-  khachhangID: { type: mongoose.Schema.Types.ObjectId, required: true },
-  nhanvienID: { type: mongoose.Schema.Types.ObjectId, required: true },
-  ngaytao: { type: Date, required: true },
-  ngayhen: { type: Date, required: true },
-  ghichu: { type: String },
-  trangthai: { type: String, enum: ['chualichhen', 'daxacnhan', 'dahuy', 'hoanthanh'], default: 'chualichhen' },
-  diadiem: { type: String }
-}, { collection: 'lichhen' });
+const lichhenSchema = new mongoose.Schema(
+  {
+    khachhangID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'Thiếu thông tin khách hàng'],
+    },
+    nhanvienID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'Thiếu thông tin nhân viên phụ trách'],
+    },
+    ngayhen: {
+      type: Date,
+      required: [true, 'Ngày hẹn là bắt buộc'],
+    },
+    ghichu: {
+      type: String,
+      default: '',
+    },
+    trangthai: {
+      type: String,
+      enum: ['choxacnhan', 'xacnhan', 'hoanthanh', 'huy'],
+      default: 'choxacnhan',
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User', // Người tạo lịch (phải trùng với nhanvienID)
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
 
-lichhenSchema.index({ khachhangID: 1 });
-lichhenSchema.index({ nhanvienID: 1 });
-lichhenSchema.index({ ngayhen: 1 });
-lichhenSchema.index({ trangthai: 1 });
-
-module.exports = mongoose.model('LichHen', lichhenSchema);
+export default mongoose.model('Lichhen', lichhenSchema);
