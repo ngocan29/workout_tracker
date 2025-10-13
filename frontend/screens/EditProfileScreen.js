@@ -1,216 +1,132 @@
-import React from 'react';
-import { View, Text, TextInput, Image, TouchableOpacity, StyleSheet } from 'react-native';
-import { ArrowLeft, Camera } from 'react-native-feather';
-import Colors from '../app-example/constants/Colors';
-import { Picker } from '@react-native-picker/picker';
+import React, { useState } from 'react'; // Nhập React và useState để quản lý form
+import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native'; // Nhập các thành phần giao diện
+import { Picker } from '@react-native-picker/picker'; // Import Picker từ package chính thức
+import { useRouter, useLocalSearchParams } from 'expo-router'; // Nhập useRouter và useLocalSearchParams để điều hướng và lấy params
+import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
 
-export default function EditProfileScreen({ setCurrentScreen, userProfile, setUserProfile }) {
+// Placeholder cho API cập nhật hồ sơ
+const updateProfile = async (data) => { return data; }; // Giả lập cập nhật thành công
+
+export default function EditProfileScreen() {
+  const router = useRouter(); // Hook điều hướng
+  const { userData } = useLocalSearchParams(); // Lấy userData từ params
+  const parsedUserData = userData ? JSON.parse(userData) : {}; // Parse userData từ JSON
+  const isBusiness = parsedUserData.loai_tai_khoan === 'business'; // Kiểm tra loại tài khoản
+
+  const [ten, setTen] = useState(parsedUserData.ten || ''); // Tên (cá nhân) hoặc tên công ty (doanh nghiệp)
+  const [sodienthoai, setSodienthoai] = useState(parsedUserData.sodienthoai || ''); // Số điện thoại
+  const [diachi, setDiachi] = useState(parsedUserData.diachi || ''); // Địa chỉ
+  const [email, setEmail] = useState(parsedUserData.email || ''); // Email (chỉ đọc)
+  const [masothue, setMasothue] = useState(parsedUserData.masothue || ''); // Mã số thuế (doanh nghiệp)
+  const [nguoidaidien, setNguoidaidien] = useState(parsedUserData.nguoidaidien || ''); // Người đại diện (doanh nghiệp)
+  const [cccd, setCccd] = useState(parsedUserData.CCCD || ''); // CCCD (cá nhân)
+  const [ngaysinh, setNgaysinh] = useState(parsedUserData.ngaysinh || ''); // Ngày sinh (cá nhân)
+  const [gioiTinh, setGioiTinh] = useState(parsedUserData.gioitinh || 'Nam'); // Giới tính (cá nhân)
+
+  const handleSave = async () => { // Hàm lưu thay đổi hồ sơ
+    const updatedData = { // Tạo dữ liệu cập nhật
+      email,
+      ten,
+      sodienthoai,
+      diachi,
+      loai_tai_khoan: isBusiness ? 'business' : 'personal',
+      ...(isBusiness ? { masothue, nguoidaidien } : { CCCD: cccd, ngaysinh, gioiTinh })
+    };
+    const result = await updateProfile(updatedData); // Gọi API cập nhật
+    if (result) { // Nếu thành công, quay lại MainScreen
+      router.back(); // Đóng màn hình và quay lại HomeTab
+    } else { // Nếu thất bại, hiển thị lỗi
+      Alert.alert('Lỗi', 'Không thể cập nhật hồ sơ');
+    }
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: Colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setCurrentScreen('main')}>
-          <ArrowLeft stroke={Colors.text} width={24} height={24} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chỉnh Sửa Hồ Sơ</Text>
-        <TouchableOpacity style={styles.saveButton} onPress={() => setCurrentScreen('main')}>
-          <Text style={styles.saveButtonText}>Lưu</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.avatarSection}>
-        <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
-        <TouchableOpacity style={styles.cameraButton}>
-          <Camera stroke={Colors.white} width={20} height={20} />
-        </TouchableOpacity>
-        <Text style={styles.avatarHint}>Nhấn vào camera để thay đổi ảnh đại diện</Text>
-      </View>
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder="Họ và tên"
-          value={userProfile.name}
-          onChangeText={(text) => setUserProfile({ ...userProfile, name: text })}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={userProfile.email}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Số điện thoại"
-          value={userProfile.phone}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Ngày sinh"
-          value={userProfile.birthday}
-        />
-        <Picker
-          style={styles.picker}
-          selectedValue={userProfile.gender}
-          onValueChange={(value) => setUserProfile({ ...userProfile, gender: value })}
-        >
-          <Picker.Item label="Nam" value="male" />
-          <Picker.Item label="Nữ" value="female" />
-          <Picker.Item label="Khác" value="other" />
-        </Picker>
-        <View style={styles.row}>
+    <View style={styles.container}> {/* Container chính */}
+      <Text style={styles.title}>
+        {isBusiness ? 'Cập nhật thông tin doanh nghiệp' : 'Cập nhật thông tin cá nhân'} {/* Tiêu đề tùy loại tài khoản */}
+      </Text>
+      {isBusiness ? ( // Form cho doanh nghiệp
+        <>
           <TextInput
-            style={[styles.input, styles.halfInput]}
-            placeholder="Chiều cao (cm)"
-            value={userProfile.height.toString()}
-            keyboardType="numeric"
-          />
+            style={styles.input}
+            placeholder="Tên công ty"
+            value={ten}
+            onChangeText={setTen}
+          /> {/* Trường tên công ty */}
           <TextInput
-            style={[styles.input, styles.halfInput]}
-            placeholder="Cân nặng (kg)"
-            value={userProfile.currentWeight.toString()}
+            style={styles.input}
+            placeholder="Mã số thuế"
+            value={masothue}
+            onChangeText={setMasothue}
+          /> {/* Trường mã số thuế */}
+          <TextInput
+            style={styles.input}
+            placeholder="Người đại diện"
+            value={nguoidaidien}
+            onChangeText={setNguoidaidien}
+          /> {/* Trường người đại diện */}
+        </>
+      ) : ( // Form cho cá nhân
+        <>
+          <TextInput
+            style={styles.input}
+            placeholder="Họ tên"
+            value={ten}
+            onChangeText={setTen}
+          /> {/* Trường họ tên */}
+          <TextInput
+            style={styles.input}
+            placeholder="CCCD"
+            value={cccd}
+            onChangeText={setCccd}
             keyboardType="numeric"
-          />
-        </View>
-        <TextInput
-          style={styles.input}
-          placeholder="Cân nặng mục tiêu (kg)"
-          value={userProfile.targetWeight.toString()}
-          keyboardType="numeric"
-        />
-        <Picker
-          style={styles.picker}
-          selectedValue={userProfile.fitnessLevel}
-          onValueChange={(value) => setUserProfile({ ...userProfile, fitnessLevel: value })}
-        >
-          <Picker.Item label="Người mới bắt đầu" value="beginner" />
-          <Picker.Item label="Trung cấp" value="intermediate" />
-          <Picker.Item label="Nâng cao" value="advanced" />
-          <Picker.Item label="Chuyên nghiệp" value="expert" />
-        </Picker>
-        <TextInput
-          style={styles.input}
-          placeholder="Địa điểm"
-          value={userProfile.location}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Nghề nghiệp"
-          value={userProfile.occupation}
-        />
-        <TextInput
-          style={[styles.input, { height: 100 }]}
-          placeholder="Giới thiệu bản thân"
-          value={userProfile.bio}
-          multiline
-        />
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => setCurrentScreen('main')}>
-            <Text style={styles.buttonText}>Hủy</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.submitButton}>
-            <Text style={[styles.buttonText, { color: Colors.white }]}>Lưu Thay Đổi</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
+          /> {/* Trường CCCD */}
+          <TextInput
+            style={styles.input}
+            placeholder="Ngày sinh (dd/mm/yyyy)"
+            value={ngaysinh}
+            onChangeText={setNgaysinh}
+          /> {/* Trường ngày sinh (placeholder cho date picker) */}
+          <Picker
+            selectedValue={gioiTinh}
+            onValueChange={(value) => setGioiTinh(value)}
+            style={styles.input}
+          > {/* Dropdown giới tính */}
+            <Picker.Item label="Nam" value="Nam" />
+            <Picker.Item label="Nữ" value="Nữ" />
+          </Picker> {/* Kết thúc dropdown */}
+        </>
+      )}
+      <TextInput
+        style={styles.input}
+        placeholder="Số điện thoại"
+        value={sodienthoai}
+        onChangeText={setSodienthoai}
+        keyboardType="phone-pad"
+      /> {/* Trường số điện thoại (chung) */}
+      <TextInput
+        style={styles.input}
+        placeholder="Địa chỉ"
+        value={diachi}
+        onChangeText={setDiachi}
+      /> {/* Trường địa chỉ (chung) */}
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        value={email}
+        editable={false}
+      /> {/* Trường email (chỉ đọc) */}
+      <View style={styles.actions}> {/* Container cho các nút hành động */}
+        <Button title="Hủy" onPress={() => router.back()} color={Colors.gray} /> {/* Nút hủy, quay lại HomeTab */}
+        <Button title="Lưu thay đổi" onPress={handleSave} color={Colors.primary} /> {/* Nút lưu, gọi handleSave */}
+      </View> {/* Kết thúc actions */}
+    </View> //* Kết thúc container */
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    padding: 8,
-  },
-  saveButtonText: {
-    fontSize: 14,
-    color: Colors.white,
-  },
-  avatarSection: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 12,
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 90,
-    backgroundColor: Colors.primary,
-    borderRadius: 20,
-    padding: 8,
-  },
-  avatarHint: {
-    fontSize: 14,
-    color: Colors.textLight,
-  },
-  form: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  picker: {
-    borderWidth: 1,
-    borderColor: Colors.gray,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  halfInput: {
-    width: '48%',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cancelButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.gray,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  submitButton: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    fontSize: 16,
-    color: Colors.text,
-  },
+const styles = StyleSheet.create({ // Style cho giao diện
+  container: { flex: 1, padding: 24, backgroundColor: Colors.white }, // Container toàn màn hình
+  title: { fontSize: 18, fontWeight: 'bold', color: Colors.primary, textAlign: 'center', marginBottom: 16 }, // Style tiêu đề
+  input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 12, borderColor: Colors.gray }, // Style trường nhập
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }, // Style container nút
 });

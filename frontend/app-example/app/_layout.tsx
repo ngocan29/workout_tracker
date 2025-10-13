@@ -1,24 +1,16 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Tabs } from 'expo-router';
+import TabBar from '../components/ui/TabBar';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
+export default function TabsLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Tabs tabBar={() => <TabBar />}>
+      <Tabs.Screen name="index" options={{ headerShown: false }} />
+      <Tabs.Screen name="explore" options={{ headerShown: false }} />
+      <Tabs.Screen name="HomeTab" options={{ headerShown: false }} />
+      <Tabs.Screen name="NutritionTab" options={{ headerShown: false }} />
+      <Tabs.Screen name="ProfileTab" options={{ headerShown: false }} />
+      <Tabs.Screen name="ProgressTab" options={{ headerShown: false }} />
+      <Tabs.Screen name="WorkoutTab" options={{ headerShown: false }} />
+    </Tabs>
   );
 }

@@ -1,163 +1,133 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import { ArrowLeft } from 'react-native-feather';
-import Colors from '../app-example/constants/Colors';
-import { Picker } from '@react-native-picker/picker';
+import React, { useState } from 'react'; // Nhập React và useState để quản lý form
+import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity } from 'react-native'; // Nhập các thành phần giao diện
+import { useRouter } from 'expo-router'; // Nhập useRouter để điều hướng
+import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
 
-export default function RegisterScreen({ setCurrentScreen }) {
-  const [registerType, setRegisterType] = useState('personal');
+// Placeholder cho AuthService
+const AuthService = {
+  signup: async (data) => { return true; }, // Giả lập đăng ký thành công
+};
+
+export default function RegisterScreen() {
+  const [accountType, setAccountType] = useState(null); // Trạng thái loại tài khoản (Chọn_loai_tai_khoan)
+  const [name, setName] = useState(''); // Tên (cho cá nhân)
+  const [email, setEmail] = useState(''); // Email
+  const [password, setPassword] = useState(''); // Mật khẩu
+  const [companyName, setCompanyName] = useState(''); // Tên công ty (doanh nghiệp)
+  const [address, setAddress] = useState(''); // Địa chỉ (doanh nghiệp)
+  const [taxCode, setTaxCode] = useState(''); // Mã số thuế (doanh nghiệp)
+  const [representative, setRepresentative] = useState(''); // Người đại diện (doanh nghiệp)
+  const [phone, setPhone] = useState(''); // Số điện thoại (doanh nghiệp)
+  const router = useRouter(); // Hook điều hướng
+
+  const handleSelectType = (type) => { // Hàm chọn loại tài khoản
+    setAccountType(type); // Cập nhật trạng thái, chuyển sang Nhập_thông_tin_CN hoặc Nhập_thông_tin_DN
+  };
+
+  const handleSignup = async () => { // Hàm xử lý đăng ký
+    let data = { email, password, accountType }; // Dữ liệu cơ bản
+    if (accountType === 'business') { // Nếu là doanh nghiệp, thêm các trường đặc thù
+      data = { ...data, companyName, address, taxCode, representative, phone }; // Nhập_thông_tin_DN
+    } else { // Nếu là cá nhân, thêm tên
+      data = { ...data, name }; // Nhập_thông_tin_CN
+    }
+    const success = await AuthService.signup(data); // Gọi API đăng ký
+    if (success) { // Nếu thành công, chuyển về LoginScreen
+      router.replace('Login'); // Chuyển sang Đăng_nhập (Chờ_xác_nhận_email)
+    } else { // Nếu thất bại, hiển thị lỗi
+      alert('Đăng ký thất bại');
+    }
+  };
+
+  const handleLogin = () => { // Hàm chuyển hướng về đăng nhập
+    router.push('Login'); // Chuyển từ Đăng_ký sang Đăng_nhập
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setCurrentScreen('login')}>
-          <ArrowLeft stroke={Colors.text} width={24} height={24} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Đăng Ký Tài Khoản</Text>
-      </View>
-      <View style={styles.accountType}>
-        <TouchableOpacity
-          style={[styles.typeCard, registerType === 'personal' && styles.activeType]}
-          onPress={() => setRegisterType('personal')}
-        >
-          <Text style={[styles.typeText, registerType === 'personal' && { color: Colors.primary }]}>Cá Nhân</Text>
-          <Text style={styles.typeSubtitle}>Người dùng thường</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.typeCard, registerType === 'business' && styles.activeType]}
-          onPress={() => setRegisterType('business')}
-        >
-          <Text style={[styles.typeText, registerType === 'business' && { color: Colors.secondary }]}>Doanh Nghiệp</Text>
-          <Text style={styles.typeSubtitle}>Gym, PT, HLV</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.form}>
-        {registerType === 'personal' ? (
-          <TextInput style={styles.input} placeholder="Họ và tên" placeholderTextColor={Colors.textLight} />
-        ) : (
-          <>
-            <TextInput style={styles.input} placeholder="Tên doanh nghiệp" placeholderTextColor={Colors.textLight} />
-            <Picker
-              style={styles.picker}
-              selectedValue="gym"
-              onValueChange={(value) => console.log(value)}
-            >
-              <Picker.Item label="Phòng tập Gym" value="gym" />
-              <Picker.Item label="Trung tâm Yoga" value="yoga" />
-              <Picker.Item label="Huấn luyện viên cá nhân" value="personal" />
-              <Picker.Item label="Trung tâm Fitness" value="fitness" />
-              <Picker.Item label="Khác" value="other" />
-            </Picker>
-          </>
-        )}
-        <TextInput style={styles.input} placeholder="Email" placeholderTextColor={Colors.textLight} />
-        <TextInput style={styles.input} placeholder="Số điện thoại" placeholderTextColor={Colors.textLight} />
-        <TextInput style={styles.input} placeholder="Mật khẩu" placeholderTextColor={Colors.textLight} secureTextEntry />
-        <TextInput style={styles.input} placeholder="Xác nhận mật khẩu" placeholderTextColor={Colors.textLight} secureTextEntry />
-        <TouchableOpacity style={styles.submitButton} onPress={() => setCurrentScreen('main')}>
-          <Text style={styles.submitButtonText}>Đăng Ký</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.googleButton}>
-          <Text style={styles.googleButtonText}>Đăng ký bằng Google</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setCurrentScreen('login')}>
-          <Text style={styles.linkText}>Đã có tài khoản? Đăng nhập</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    <View style={styles.container}> {/* Container chính */}
+      <Text style={styles.title}>Đăng ký tài khoản</Text> {/* Tiêu đề */}
+      {!accountType ? ( // Nếu chưa chọn loại tài khoản, hiển thị lựa chọn
+        <View>
+          <Button
+            title="Tài khoản cá nhân"
+            onPress={() => handleSelectType('personal')} // Chọn cá nhân (Chọn_loai_tai_khoan -> Nhập_thông_tin_CN)
+            color={Colors.primary}
+          />
+          <Button
+            title="Tài khoản doanh nghiệp"
+            onPress={() => handleSelectType('business')} // Chọn doanh nghiệp (Chọn_loai_tai_khoan -> Nhập_thông_tin_DN)
+            color={Colors.primary}
+          />
+        </View>
+      ) : ( // Nếu đã chọn, hiển thị form tương ứng
+        <View>
+          {accountType === 'business' ? ( // Form cho doanh nghiệp
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Tên công ty"
+                value={companyName}
+                onChangeText={setCompanyName}
+              /> {/* Trường nhập tên công ty */}
+              <TextInput
+                style={styles.input}
+                placeholder="Địa chỉ"
+                value={address}
+                onChangeText={setAddress}
+              /> {/* Trường nhập địa chỉ */}
+              <TextInput
+                style={styles.input}
+                placeholder="Mã số thuế"
+                value={taxCode}
+                onChangeText={setTaxCode}
+              /> {/* Trường nhập mã số thuế */}
+              <TextInput
+                style={styles.input}
+                placeholder="Người đại diện"
+                value={representative}
+                onChangeText={setRepresentative}
+              /> {/* Trường nhập người đại diện */}
+              <TextInput
+                style={styles.input}
+                placeholder="Số điện thoại"
+                value={phone}
+                onChangeText={setPhone}
+              /> {/* Trường nhập số điện thoại */}
+            </>
+          ) : ( // Form cho cá nhân
+            <TextInput
+              style={styles.input}
+              placeholder="Tên đầy đủ"
+              value={name}
+              onChangeText={setName}
+            /> // Trường nhập tên
+          )}
+          <TextInput
+            style={styles.input}
+            placeholder="email@example.com"
+            value={email}
+            onChangeText={setEmail}
+          /> {/* Trường nhập email (chung) */}
+          <TextInput
+            style={styles.input}
+            placeholder="Nhập mật khẩu"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          /> {/* Trường nhập mật khẩu (chung) */}
+          <Button title="Đăng ký" onPress={handleSignup} color={Colors.primary} /> {/* Nút đăng ký, gọi handleSignup */}
+        </View>
+      )}
+      <TouchableOpacity onPress={handleLogin}> {/* Liên kết về đăng nhập */}
+        <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text> {/* Văn bản liên kết */}
+      </TouchableOpacity> {/* Kết thúc liên kết */}
+    </View> // Kết thúc container
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginLeft: 12,
-  },
-  accountType: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  typeCard: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginHorizontal: 8,
-    borderWidth: 1,
-    borderColor: Colors.gray,
-  },
-  activeType: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}20`,
-  },
-  typeText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  typeSubtitle: {
-    fontSize: 12,
-    color: Colors.textLight,
-  },
-  form: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  picker: {
-    borderWidth: 1,
-    borderColor: Colors.gray,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  submitButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    color: Colors.white,
-    fontWeight: 'bold',
-  },
-  googleButton: {
-    borderWidth: 1,
-    borderColor: Colors.gray,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  googleButtonText: {
-    fontSize: 16,
-    color: Colors.text,
-  },
-  linkText: {
-    fontSize: 14,
-    color: Colors.secondary,
-    textAlign: 'center',
-  },
+const styles = StyleSheet.create({ // Style cho giao diện
+  container: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: Colors.white }, // Container căn giữa, nền trắng
+  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: Colors.black }, // Style tiêu đề
+  input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 14, borderColor: Colors.gray }, // Style trường nhập
+  link: { color: Colors.primary, textAlign: 'center', marginTop: 20 }, // Style liên kết
 });

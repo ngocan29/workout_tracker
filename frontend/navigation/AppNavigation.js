@@ -6,7 +6,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import TrainerScreen from '../screens/TrainerScreen';
 import WorkoutDetailScreen from '../screens/WorkoutDetailScreen';
 import MainScreen from '../screens/MainScreen';
-import { useUserProfile } from '../app/_layout';
+import { useUserProfile } from '../app-example/app/_layout';
 
 const Stack = createStackNavigator();
 

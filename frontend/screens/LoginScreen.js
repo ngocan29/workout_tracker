@@ -1,89 +1,69 @@
-// src/screens/LoginScreen.js
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import Colors from '../app-example/constants/Colors';
+import React, { useState } from 'react'; // Nhập React và useState để quản lý trạng thái form
+import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity, Platform } from 'react-native'; // Nhập các thành phần giao diện
+import { useRouter } from 'expo-router'; // Nhập useRouter để điều hướng
+import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
 
-export default function LoginScreen({ setCurrentScreen }) {
+// Placeholder cho AuthService
+const AuthService = {
+  signin: async (email, password) => { return true; }, // Giả lập đăng nhập thành công
+  signInWithGoogle: async () => { /* Giả lập Google sign-in */ },
+};
+
+export default function LoginScreen() {
+  const [email, setEmail] = useState(''); // Trạng thái cho email người dùng nhập
+  const [password, setPassword] = useState(''); // Trạng thái cho mật khẩu
+  const router = useRouter(); // Hook để điều hướng
+
+  const handleSignIn = async () => { // Hàm xử lý đăng nhập bằng email/mật khẩu
+    const success = await AuthService.signin(email, password); // Gọi API đăng nhập
+    if (success) { // Nếu thành công, chuyển sang tabs
+      router.replace('/(tabs)/'); // Điều hướng đến tabs (Đã_đăng_nhập)
+    } else { // Nếu thất bại, hiển thị lỗi
+      alert('Đăng nhập thất bại'); // Hiển thị lỗi (Lỗi_đăng_nhập)
+    }
+  };
+
+  const handleGoogleSignIn = async () => { // Hàm xử lý đăng nhập bằng Google
+    if (Platform.OS === 'ios') { // Kiểm tra nếu chạy trên iOS
+      console.log('Đang chạy trên iOS Simulator - Bỏ qua Google Sign-In'); // Bỏ qua Google sign-in trên simulator
+      return;
+    }
+    await AuthService.signInWithGoogle(); // Gọi API Google sign-in
+    router.replace('/(tabs)/'); // Chuyển đến tabs nếu thành công
+  };
+
+  const handleSignup = () => { // Hàm chuyển hướng sang màn hình đăng ký
+    router.push('/Register'); // Chuyển từ Đăng_nhập sang Đăng_ký
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: Colors.background }]}>
-      <View style={styles.card}>
-        <Text style={[styles.title, { color: Colors.text }]}>FitTracker Pro</Text>
-        <Text style={styles.subtitle}>Chào mừng bạn trở lại!</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Nhập email của bạn"
-          placeholderTextColor={Colors.textLight}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Nhập mật khẩu"
-          placeholderTextColor={Colors.textLight}
-          secureTextEntry
-        />
-        <TouchableOpacity style={styles.button} onPress={() => setCurrentScreen('main')}>
-          <Text style={styles.buttonText}>Đăng Nhập</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setCurrentScreen('register')}>
-          <Text style={styles.linkText}>Chưa có tài khoản? Đăng ký ngay</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    <View style={styles.container}> {/* Container chính cho giao diện */}
+      <Text style={styles.title}>Chào mừng trở lại</Text> {/* Tiêu đề màn hình */}
+      <TextInput
+        style={styles.input}
+        placeholder="email@example.com"
+        value={email}
+        onChangeText={setEmail}
+      /> {/* Trường nhập email */}
+      <TextInput
+        style={styles.input}
+        placeholder="••••••••"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      /> {/* Trường nhập mật khẩu */}
+      <Button title="Đăng Nhập" onPress={handleSignIn} color={Colors.primary} /> {/* Nút đăng nhập, gọi handleSignIn */}
+      <Button title="Đăng nhập với Google" onPress={handleGoogleSignIn} color={Colors.white} /> {/* Nút Google sign-in */}
+      <TouchableOpacity onPress={handleSignup}> {/* Nút chuyển sang màn hình đăng ký */}
+        <Text style={styles.link}>Người dùng mới? Tạo tài khoản</Text> {/* Văn bản liên kết */}
+      </TouchableOpacity> {/* Kết thúc liên kết đăng ký */}
+    </View> // Kết thúc container
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 20,
-    width: '100%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.textLight,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  buttonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  linkText: {
-    color: Colors.secondary,
-    textAlign: 'center',
-    fontSize: 14,
-  },
+const styles = StyleSheet.create({ // Định nghĩa style cho giao diện
+  container: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: Colors.white }, // Container căn giữa, nền trắng
+  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: Colors.black }, // Style tiêu đề
+  input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 14, borderColor: Colors.gray }, // Style trường nhập
+  link: { color: Colors.primary, textAlign: 'center', marginTop: 20 }, // Style liên kết đăng ký
 });
