@@ -1,6 +1,5 @@
 import React, { useState } from 'react'; // Nhập React và useState để quản lý form
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native'; // Nhập các thành phần giao diện
-import { Picker } from '@react-native-picker/picker'; // Import Picker từ package chính thức
+import { View, Text, TextInput, Button, StyleSheet, Alert, Picker } from 'react-native'; // Nhập các thành phần giao diện
 import { useRouter, useLocalSearchParams } from 'expo-router'; // Nhập useRouter và useLocalSearchParams để điều hướng và lấy params
 import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
 
@@ -11,7 +10,7 @@ export default function EditProfileScreen() {
   const router = useRouter(); // Hook điều hướng
   const { userData } = useLocalSearchParams(); // Lấy userData từ params
   const parsedUserData = userData ? JSON.parse(userData) : {}; // Parse userData từ JSON
-  const isBusiness = parsedUserData.loai_tai_khoan === 'business'; // Kiểm tra loại tài khoản
+  const isBusiness = parsedUserData.userRole === 'business'; // Kiểm tra loại tài khoản
 
   const [ten, setTen] = useState(parsedUserData.ten || ''); // Tên (cá nhân) hoặc tên công ty (doanh nghiệp)
   const [sodienthoai, setSodienthoai] = useState(parsedUserData.sodienthoai || ''); // Số điện thoại
@@ -29,7 +28,7 @@ export default function EditProfileScreen() {
       ten,
       sodienthoai,
       diachi,
-      loai_tai_khoan: isBusiness ? 'business' : 'personal',
+      userRole: isBusiness ? 'business' : 'personal',
       ...(isBusiness ? { masothue, nguoidaidien } : { CCCD: cccd, ngaysinh, gioiTinh })
     };
     const result = await updateProfile(updatedData); // Gọi API cập nhật
@@ -120,7 +119,7 @@ export default function EditProfileScreen() {
         <Button title="Hủy" onPress={() => router.back()} color={Colors.gray} /> {/* Nút hủy, quay lại HomeTab */}
         <Button title="Lưu thay đổi" onPress={handleSave} color={Colors.primary} /> {/* Nút lưu, gọi handleSave */}
       </View> {/* Kết thúc actions */}
-    </View> //* Kết thúc container */
+    </View> // Kết thúc container
   );
 }
 

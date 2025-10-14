@@ -1,9 +1,7 @@
-/* eslint-disable react/jsx-no-comment-textnodes */
 import React, { useState, useEffect } from 'react'; // Nhập React, useState, useEffect để quản lý trạng thái và fetch dữ liệu
 import { View, Text, Button, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native'; // Nhập các thành phần giao diện
 import { useRouter } from 'expo-router'; // Nhập useRouter từ expo-router để điều hướng
 import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
-import EditProfileScreen from './EditProfileScreen'; // Nhập màn hình chỉnh sửa hồ sơ
 
 // Placeholder cho AuthService và API fetching
 const AuthService = { signout: async () => { /* Giả lập đăng xuất */ } };
@@ -21,7 +19,7 @@ export default function MainScreen() {
   const [branches, setBranches] = useState([]); // Trạng thái cho danh sách chi nhánh
   const [loading, setLoading] = useState(true); // Trạng thái tải dữ liệu
   const [refreshing, setRefreshing] = useState(false); // Trạng thái làm mới danh sách
-  const router = useRouter(); // Hook điều hướng của expo-router
+  const router = useRouter(); // Hook điều hướng
 
   useEffect(() => { // Hook để tải dữ liệu khi màn hình khởi tạo
     loadData(); // Gọi hàm tải dữ liệu (Trang_chủ_chung)
@@ -43,7 +41,7 @@ export default function MainScreen() {
 
   const handleLogout = async () => { // Hàm xử lý đăng xuất
     await AuthService.signout(); // Gọi API đăng xuất
-    router.replace('/'); // Chuyển về màn hình đăng nhập (Chưa_đăng_nhập)
+    router.replace('/'); // Chuyển về Đăng_nhập (Chưa_đăng_nhập)
   };
 
   const handleEditProfile = () => { // Hàm mở màn hình chỉnh sửa hồ sơ (business only)
@@ -100,7 +98,7 @@ export default function MainScreen() {
                 <Button title="Sửa" onPress={() => handleEditBranch(item)} color={Colors.primary} /> {/* Nút sửa */}
                 <Button title="Xóa" onPress={() => handleDeleteBranch(item)} color={Colors.accent} /> {/* Nút xóa */}
               </>
-            ) : null} // Personal không có nút quản lý (Dashboard_personal)
+            ) : null} {/* Personal không có nút quản lý (Dashboard_personal) */}
           </View>
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />} // Kéo để làm mới danh sách

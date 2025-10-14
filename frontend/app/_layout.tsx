@@ -13,7 +13,7 @@ console.log('Colors:', Colors);
           headerTitleStyle: { fontWeight: 'bold' },
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'Home' }} />
+        <Stack.Screen name="index" options={{ title: 'Workout Tracker' }} />
       </Stack>
     </View>
   );

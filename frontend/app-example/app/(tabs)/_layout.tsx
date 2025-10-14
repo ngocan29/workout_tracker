@@ -13,7 +13,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ headerShown: false }} /> {/* Màn hình mặc định */}
       <Tabs.Screen name="explore" options={{ headerShown: false }} /> {/* Màn hình explore */}
-      <Tabs.Screen name="HomeTab" options={{ headerShown: false }} /> {/* Màn hình HomeTab, ánh xạ tới file HomeTab.js */}
+      <Tabs.Screen name="HomeTab" options={{ headerShown: false }} /> {/* Màn hình HomeTab, ánh xạ tới HomeTab.js */}
       <Tabs.Screen name="NutritionTab" options={{ headerShown: false }} /> {/* Màn hình NutritionTab */}
       <Tabs.Screen name="ProfileTab" options={{ headerShown: false }} /> {/* Màn hình ProfileTab */}
       <Tabs.Screen name="ProgressTab" options={{ headerShown: false }} /> {/* Màn hình ProgressTab */}

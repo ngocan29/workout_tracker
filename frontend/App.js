@@ -1,16 +1,21 @@
-import React from 'react'; // Nhập React để xây dựng giao diện
-import { NavigationContainer } from '@react-navigation/native'; // Nhập NavigationContainer để quản lý điều hướng
-import { Stack } from 'expo-router'; // Nhập Stack từ expo-router
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { Stack } from 'expo-router';
+import LoginScreen from './screens/LoginScreen';
+import AccountTypeSelection from './screens/AccountTypeSelection';
+import RegisterScreen from './screens/RegisterScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
 
 export default function App() {
   return (
-    <NavigationContainer independent={true}> {/* NavigationContainer độc lập */}
-      <Stack initialRouteName="index"> {/* Khởi tạo stack với màn hình gốc là index */}
-        <Stack.Screen name="index" options={{ headerShown: false }} /> {/* Màn hình gốc */}
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} /> {/* Nhóm tab */}
-        <Stack.Screen name="EditProfile" options={{ headerShown: true, title: 'Chỉnh sửa hồ sơ' }} /> {/* Màn hình chỉnh sửa hồ sơ */}
-        <Stack.Screen name="Register" options={{ headerShown: false }} /> {/* Màn hình đăng ký */}
+    <NavigationContainer independent={true}>
+      <Stack initialRouteName="/">
+        <Stack.Screen name="/" component={LoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="AccountTypeSelection" component={AccountTypeSelection} options={{ headerShown: false }} />
+        <Stack.Screen name="RegisterScreen" component={RegisterScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="app-example/app/(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Chỉnh sửa hồ sơ' }} />
       </Stack>
-    </NavigationContainer> // Kết thúc NavigationContainer
+    </NavigationContainer>
   );
 }

@@ -17,7 +17,7 @@ export default function LoginScreen() {
   const handleSignIn = async () => { // Hàm xử lý đăng nhập bằng email/mật khẩu
     const success = await AuthService.signin(email, password); // Gọi API đăng nhập
     if (success) { // Nếu thành công, chuyển sang tabs
-      router.replace('/(tabs)/'); // Điều hướng đến tabs (Đã_đăng_nhập)
+      router.replace('/app-example/app/(tabs)/'); // Điều hướng đến tabs (Đã_đăng_nhập)
     } else { // Nếu thất bại, hiển thị lỗi
       alert('Đăng nhập thất bại'); // Hiển thị lỗi (Lỗi_đăng_nhập)
     }
@@ -29,41 +29,45 @@ export default function LoginScreen() {
       return;
     }
     await AuthService.signInWithGoogle(); // Gọi API Google sign-in
-    router.replace('/(tabs)/'); // Chuyển đến tabs nếu thành công
+    router.replace('/app-example/app/(tabs)/'); // Chuyển đến tabs nếu thành công
   };
 
-  const handleSignup = () => { // Hàm chuyển hướng sang màn hình đăng ký
-    router.push('/Register'); // Chuyển từ Đăng_nhập sang Đăng_ký
+  const handleSignup = () => { // Hàm chuyển hướng sang màn hình chọn loại tài khoản
+    router.push('/AccountTypeSelection'); // Chuyển từ Đăng_nhập sang Chọn_loai_tai_khoan
   };
 
   return (
-    <View style={styles.container}> {/* Container chính cho giao diện */}
-      <Text style={styles.title}>Chào mừng trở lại</Text> {/* Tiêu đề màn hình */}
-      <TextInput
-        style={styles.input}
-        placeholder="email@example.com"
-        value={email}
-        onChangeText={setEmail}
-      /> {/* Trường nhập email */}
-      <TextInput
-        style={styles.input}
-        placeholder="••••••••"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      /> {/* Trường nhập mật khẩu */}
-      <Button title="Đăng Nhập" onPress={handleSignIn} color={Colors.primary} /> {/* Nút đăng nhập, gọi handleSignIn */}
-      <Button title="Đăng nhập với Google" onPress={handleGoogleSignIn} color={Colors.white} /> {/* Nút Google sign-in */}
-      <TouchableOpacity onPress={handleSignup}> {/* Nút chuyển sang màn hình đăng ký */}
-        <Text style={styles.link}>Người dùng mới? Tạo tài khoản</Text> {/* Văn bản liên kết */}
-      </TouchableOpacity> {/* Kết thúc liên kết đăng ký */}
-    </View> // Kết thúc container
+    <View style={styles.container}>
+      <Text style={styles.title}>Chào mừng trở lại</Text>
+      <View style={styles.formContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="email@example.com"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="••••••••"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <Button title="Đăng Nhập" onPress={handleSignIn} color={Colors.primary} />
+        <Button title="Đăng nhập với Google" onPress={handleGoogleSignIn} color={Colors.white} />
+      </View>
+      <TouchableOpacity onPress={handleSignup} style={styles.linkContainer}>
+        <Text style={styles.link}>Người dùng mới? Tạo tài khoản</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({ // Định nghĩa style cho giao diện
-  container: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: Colors.white }, // Container căn giữa, nền trắng
-  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: Colors.black }, // Style tiêu đề
-  input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 14, borderColor: Colors.gray }, // Style trường nhập
-  link: { color: Colors.primary, textAlign: 'center', marginTop: 20 }, // Style liên kết đăng ký
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: Colors.white },
+  formContainer: { marginVertical: 10 },
+  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: Colors.black },
+  input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 14, borderColor: Colors.gray },
+  linkContainer: { marginTop: 20, alignItems: 'center' },
+  link: { color: Colors.primary, fontSize: 16 },
 });
