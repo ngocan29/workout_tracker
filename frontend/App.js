@@ -11,7 +11,7 @@ export default function App() {
     <NavigationContainer independent={true}>
       <Stack initialRouteName="/">
         <Stack.Screen name="/" component={LoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AccountTypeSelection" component={AccountTypeSelection} options={{ headerShown: false }} />
+        <Stack.Screen name="AccountTypeSelection" component={AccountTypeSelection} options={{ headerShown: false }} /> 
         <Stack.Screen name="RegisterScreen" component={RegisterScreen} options={{ headerShown: false }} />
         <Stack.Screen name="app-example/app/(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Chỉnh sửa hồ sơ' }} />

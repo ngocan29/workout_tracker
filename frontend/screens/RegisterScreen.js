@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../app-example/constants/Colors';
-
-const AuthService = {
-  signup: async (data) => { return true; },
-};
+import { AuthService } from '../services/api';
 
 export default function RegisterScreen() {
   const { accountType } = useLocalSearchParams();
@@ -17,20 +14,75 @@ export default function RegisterScreen() {
   const [taxCode, setTaxCode] = useState('');
   const [representative, setRepresentative] = useState('');
   const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSignup = async () => {
-    let data = { email, password, accountType };
-    if (accountType === 'business') {
-      data = { ...data, companyName, address, taxCode, representative, phone };
-    } else {
-      data = { ...data, name };
+    // Validation
+    if (!email || !password) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email và mật khẩu');
+      return;
     }
-    const success = await AuthService.signup(data);
-    if (success) {
-      router.replace('/app-example/app/(tabs)/'); // Điều hướng đến tabs sau khi đăng ký thành công
-    } else {
-      alert('Đăng ký thất bại');
+    
+    if (accountType === 'business' && (!companyName || !address || !representative || !phone)) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin doanh nghiệp');
+      return;
+    }
+    
+    if (accountType === 'personal' && !name) {
+      Alert.alert('Lỗi', 'Vui lòng nhập tên đầy đủ');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Chuẩn bị data theo format backend yêu cầu
+      let data = {
+        email,
+        matkhau: password,
+        loai_tai_khoan: accountType,
+      };
+      
+      if (accountType === 'business') {
+        data = {
+          ...data,
+          ten: companyName, // tên công ty
+          diachi: address,
+          nguoidaidien: representative,
+          sodienthoai: phone,
+        };
+      } else {
+        data = {
+          ...data,
+          ten: name, // tên cá nhân
+          diachi: address || 'N/A',
+          sodienthoai: phone || '0000000000',
+        };
+      }
+      
+      const response = await AuthService.register(data);
+      
+      if (response && response.user) {
+        Alert.alert('Thành công', 'Đăng ký tài khoản thành công!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Điều hướng dựa theo loại tài khoản
+              if (response.user.loai_tai_khoan === 'business') {
+                router.replace('/MainScreen');
+              } else {
+                router.replace('/app-example/app/(tabs)/');
+              }
+            }
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Register error:', error);
+      Alert.alert('Đăng ký thất bại', error.message || 'Đã có lỗi xảy ra');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -96,7 +148,12 @@ export default function RegisterScreen() {
           onChangeText={setPassword}
           secureTextEntry
         />
-        <Button title="Đăng ký" onPress={handleSignup} color={Colors.primary} />
+        <Button 
+          title={loading ? "Đang đăng ký..." : "Đăng ký"} 
+          onPress={handleSignup} 
+          disabled={loading}
+          color={Colors.primary} 
+        />
       </View>
       <TouchableOpacity onPress={handleLogin} style={styles.linkContainer}>
         <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>

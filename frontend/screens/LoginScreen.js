@@ -1,25 +1,59 @@
 import React, { useState } from 'react'; // Nhập React và useState để quản lý trạng thái form
-import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity, Platform } from 'react-native'; // Nhập các thành phần giao diện
+import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native'; // Nhập các thành phần giao diện
 import { useRouter } from 'expo-router'; // Nhập useRouter để điều hướng
 import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
-
-// Placeholder cho AuthService
-const AuthService = {
-  signin: async (email, password) => { return true; }, // Giả lập đăng nhập thành công
-  signInWithGoogle: async () => { /* Giả lập Google sign-in */ },
-};
+import { AuthService } from '../services/api'; // Nhập AuthService từ API service
 
 export default function LoginScreen() {
   const [email, setEmail] = useState(''); // Trạng thái cho email người dùng nhập
   const [password, setPassword] = useState(''); // Trạng thái cho mật khẩu
+  const [loading, setLoading] = useState(false); // Trạng thái loading khi đăng nhập
   const router = useRouter(); // Hook để điều hướng
 
   const handleSignIn = async () => { // Hàm xử lý đăng nhập bằng email/mật khẩu
-    const success = await AuthService.signin(email, password); // Gọi API đăng nhập
-    if (success) { // Nếu thành công, chuyển sang tabs
-      router.replace('/app-example/app/(tabs)/'); // Điều hướng đến tabs (Đã_đăng_nhập)
-    } else { // Nếu thất bại, hiển thị lỗi
-      alert('Đăng nhập thất bại'); // Hiển thị lỗi (Lỗi_đăng_nhập)
+    if (!email || !password) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('Attempting login with:', { email, password: '***' });
+      console.log('API Base URL:', 'http://localhost:5000');
+      
+      const response = await AuthService.login(email, password); // Gọi API đăng nhập thật
+      console.log('Login response:', response);
+      
+      if (response && response.user) { // Nếu thành công
+        console.log('Login successful, user type:', response.user.loai_tai_khoan);
+        // Kiểm tra loại tài khoản và điều hướng phù hợp
+        if (response.user.loai_tai_khoan === 'business') {
+          router.replace('/MainScreen'); // Chuyển đến MainScreen cho business
+        } else {
+          router.replace('/app-example/app/(tabs)/'); // Chuyển đến tabs cho personal
+        }
+      }
+    } catch (error) {
+      console.error('Login error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Nếu user chưa tồn tại, gợi ý đăng ký
+      if (error.message === 'Invalid email or password') {
+        Alert.alert('Đăng nhập thất bại', 
+          'Email hoặc mật khẩu không đúng.\n\nBạn có muốn đăng ký tài khoản mới không?',
+          [
+            { text: 'Hủy', style: 'cancel' },
+            { text: 'Đăng ký', onPress: () => router.push('/AccountTypeSelection') }
+          ]
+        );
+      } else {
+        Alert.alert('Đăng nhập thất bại', 
+          `Lỗi: ${error.message || 'Không thể kết nối đến server'}\n\nVui lòng kiểm tra:\n- Backend server đã chạy?\n- Port 5000 có trống?`
+        ); 
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -28,8 +62,7 @@ export default function LoginScreen() {
       console.log('Đang chạy trên iOS Simulator - Bỏ qua Google Sign-In'); // Bỏ qua Google sign-in trên simulator
       return;
     }
-    await AuthService.signInWithGoogle(); // Gọi API Google sign-in
-    router.replace('/app-example/app/(tabs)/'); // Chuyển đến tabs nếu thành công
+    Alert.alert('Thông báo', 'Tính năng Google Sign-In sẽ được phát triển trong tương lai');
   };
 
   const handleSignup = () => { // Hàm chuyển hướng sang màn hình chọn loại tài khoản
@@ -53,7 +86,12 @@ export default function LoginScreen() {
           onChangeText={setPassword}
           secureTextEntry
         />
-        <Button title="Đăng Nhập" onPress={handleSignIn} color={Colors.primary} />
+        <Button 
+          title={loading ? "Đang đăng nhập..." : "Đăng Nhập"} 
+          onPress={handleSignIn} 
+          disabled={loading}
+          color={Colors.primary} 
+        />
         <Button title="Đăng nhập với Google" onPress={handleGoogleSignIn} color={Colors.white} />
       </View>
       <TouchableOpacity onPress={handleSignup} style={styles.linkContainer}>
