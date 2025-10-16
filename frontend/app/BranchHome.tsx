@@ -23,13 +23,9 @@ export default function BranchHome() {
   // Kiểm tra loại tài khoản business (support cả format cũ và mới)
   const isBusiness = parsedUserData?.loaitaikhoan === 'business' || parsedUserData?.loai_tai_khoan === 'business';
   
-  // TEMPORARY: Force business mode for testing (remove this later)
-  const isBusinessTest = true;
-  
   // Debug log
   console.log('BranchHome - parsedUserData:', parsedUserData);
   console.log('BranchHome - isBusiness:', isBusiness);
-  console.log('BranchHome - using isBusinessTest:', isBusinessTest);
 
   // Load dark mode state từ AsyncStorage khi component mount
   useEffect(() => {
@@ -138,7 +134,7 @@ export default function BranchHome() {
           setCurrentScreen={setCurrentScreen} // Truyền hàm thay đổi màn hình
           branchName={parsedBranchData?.ten} // Truyền tên chi nhánh để hiển thị
           isDarkMode={isDarkMode} // Truyền dark mode state
-          isBusiness={isBusinessTest} // TEMPORARY: Use test value
+          isBusiness={isBusiness} // Truyền trạng thái business user
         />
       )}
     </View>
