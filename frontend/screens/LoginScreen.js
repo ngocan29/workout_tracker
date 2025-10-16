@@ -1,14 +1,42 @@
-import React, { useState } from 'react'; // Nhập React và useState để quản lý trạng thái form
+import React, { useState, useEffect } from 'react'; // Nhập React và useState để quản lý trạng thái form
 import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native'; // Nhập các thành phần giao diện
 import { useRouter } from 'expo-router'; // Nhập useRouter để điều hướng
 import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
 import { AuthService } from '../services/api'; // Nhập AuthService từ API service
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Nhập AsyncStorage để lưu trữ dark mode
 
 export default function LoginScreen() {
   const [email, setEmail] = useState(''); // Trạng thái cho email người dùng nhập
   const [password, setPassword] = useState(''); // Trạng thái cho mật khẩu
   const [loading, setLoading] = useState(false); // Trạng thái loading khi đăng nhập
+  const [isDarkMode, setIsDarkMode] = useState(false); // State quản lý dark mode
   const router = useRouter(); // Hook để điều hướng
+
+  // Load dark mode state từ AsyncStorage
+  useEffect(() => {
+    const loadDarkMode = async () => {
+      try {
+        const savedDarkMode = await AsyncStorage.getItem('isDarkMode');
+        if (savedDarkMode !== null) {
+          setIsDarkMode(JSON.parse(savedDarkMode));
+        }
+      } catch (error) {
+        console.log('Error loading dark mode:', error);
+      }
+    };
+    loadDarkMode();
+  }, []);
+
+  // Toggle dark mode và save state
+  const toggleDarkMode = async () => {
+    try {
+      const newValue = !isDarkMode;
+      setIsDarkMode(newValue);
+      await AsyncStorage.setItem('isDarkMode', JSON.stringify(newValue));
+    } catch (error) {
+      console.log('Error saving dark mode:', error);
+    }
+  };
 
   const handleSignIn = async () => { // Hàm xử lý đăng nhập bằng email/mật khẩu
     if (!email || !password) {
@@ -70,18 +98,36 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Chào mừng trở lại</Text>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white }]}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: isDarkMode ? Colors.darkText : Colors.black }]}>Chào mừng trở lại</Text>
+        <TouchableOpacity 
+          style={[styles.darkModeButton, { backgroundColor: isDarkMode ? Colors.darkGreen : Colors.lightGreen }]}
+          onPress={toggleDarkMode}
+        >
+          <Text style={styles.darkModeIcon}>{isDarkMode ? '🌙' : '☀️'}</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.formContainer}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { 
+            backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+            borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+            color: isDarkMode ? Colors.darkText : Colors.black
+          }]}
           placeholder="email@example.com"
+          placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
           value={email}
           onChangeText={setEmail}
         />
         <TextInput
-          style={styles.input}
+          style={[styles.input, { 
+            backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+            borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+            color: isDarkMode ? Colors.darkText : Colors.black
+          }]}
           placeholder="••••••••"
+          placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -92,20 +138,36 @@ export default function LoginScreen() {
           disabled={loading}
           color={Colors.primary} 
         />
-        <Button title="Đăng nhập với Google" onPress={handleGoogleSignIn} color={Colors.white} />
+        {/* <Button title="Đăng nhập với Google" onPress={handleGoogleSignIn} color={Colors.white} /> */}
       </View>
       <TouchableOpacity onPress={handleSignup} style={styles.linkContainer}>
-        <Text style={styles.link}>Người dùng mới? Tạo tài khoản</Text>
+        <Text style={[styles.link, { color: isDarkMode ? Colors.darkGreen : Colors.primary }]}>Người dùng mới? Tạo tài khoản</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: Colors.white },
+  container: { flex: 1, justifyContent: 'center', padding: 16 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
   formContainer: { marginVertical: 10 },
-  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: Colors.black },
-  input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 14, borderColor: Colors.gray },
+  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', flex: 1 },
+  input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 14 },
   linkContainer: { marginTop: 20, alignItems: 'center' },
-  link: { color: Colors.primary, fontSize: 16 },
+  link: { fontSize: 16 },
+  darkModeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  darkModeIcon: {
+    fontSize: 20,
+  }
 });

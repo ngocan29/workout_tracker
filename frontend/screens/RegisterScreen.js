@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../app-example/constants/Colors';
 import { AuthService } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RegisterScreen() {
   const { accountType } = useLocalSearchParams();
@@ -15,7 +16,34 @@ export default function RegisterScreen() {
   const [representative, setRepresentative] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const router = useRouter();
+
+  // Load dark mode state từ AsyncStorage
+  useEffect(() => {
+    const loadDarkMode = async () => {
+      try {
+        const savedDarkMode = await AsyncStorage.getItem('isDarkMode');
+        if (savedDarkMode !== null) {
+          setIsDarkMode(JSON.parse(savedDarkMode));
+        }
+      } catch (error) {
+        console.log('Error loading dark mode:', error);
+      }
+    };
+    loadDarkMode();
+  }, []);
+
+  // Toggle dark mode và save state
+  const toggleDarkMode = async () => {
+    try {
+      const newValue = !isDarkMode;
+      setIsDarkMode(newValue);
+      await AsyncStorage.setItem('isDarkMode', JSON.stringify(newValue));
+    } catch (error) {
+      console.log('Error saving dark mode:', error);
+    }
+  };
 
   const handleSignup = async () => {
     // Validation
@@ -91,37 +119,69 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Đăng ký tài khoản {accountType === 'business' ? 'doanh nghiệp' : 'cá nhân'}</Text>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white }]}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: isDarkMode ? Colors.darkText : Colors.black }]}>Đăng ký tài khoản {accountType === 'business' ? 'doanh nghiệp' : 'cá nhân'}</Text>
+        <TouchableOpacity 
+          style={[styles.darkModeButton, { backgroundColor: isDarkMode ? Colors.darkGreen : Colors.lightGreen }]}
+          onPress={toggleDarkMode}
+        >
+          <Text style={styles.darkModeIcon}>{isDarkMode ? '🌙' : '☀️'}</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.formContainer}>
         {accountType === 'business' ? (
           <>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
               placeholder="Tên công ty"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
               value={companyName}
               onChangeText={setCompanyName}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
               placeholder="Địa chỉ"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
               value={address}
               onChangeText={setAddress}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
               placeholder="Mã số thuế"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
               value={taxCode}
               onChangeText={setTaxCode}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
               placeholder="Người đại diện"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
               value={representative}
               onChangeText={setRepresentative}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
               placeholder="Số điện thoại"
               value={phone}
               onChangeText={setPhone}
@@ -156,7 +216,7 @@ export default function RegisterScreen() {
         />
       </View>
       <TouchableOpacity onPress={handleLogin} style={styles.linkContainer}>
-        <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>
+        <Text style={[styles.link, { color: isDarkMode ? Colors.darkGreen : Colors.primary }]}>Đã có tài khoản? Đăng nhập</Text>
       </TouchableOpacity>
     </View>
   );
@@ -168,5 +228,22 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: Colors.black },
   input: { borderWidth: 1, padding: 10, marginVertical: 10, borderRadius: 14, borderColor: Colors.gray },
   linkContainer: { marginTop: 20, alignItems: 'center' },
-  link: { color: Colors.primary, fontSize: 16 },
+  link: { fontSize: 16 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  darkModeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  darkModeIcon: {
+    fontSize: 20,
+  }
 });

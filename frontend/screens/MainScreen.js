@@ -3,6 +3,7 @@ import { View, Text, Button, FlatList, StyleSheet, Alert, RefreshControl, TextIn
 import { useRouter, useFocusEffect } from 'expo-router'; // Nhập useRouter và useFocusEffect từ expo-router để điều hướng và focus
 import { Colors } from '../app-example/constants/Colors'; // Nhập Colors để sử dụng màu sắc
 import { AuthService, BranchService } from '../services/api'; // Nhập services từ API
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Nhập AsyncStorage để lưu trữ dark mode
 
 export default function MainScreen() {
   const [userData, setUserData] = useState(null); // Trạng thái cho dữ liệu người dùng
@@ -17,10 +18,12 @@ export default function MainScreen() {
   const [deletingBranch, setDeletingBranch] = useState(null); // Chi nhánh đang được xóa
   const [branchName, setBranchName] = useState(''); // Tên chi nhánh trong modal
   const [branchAddress, setBranchAddress] = useState(''); // Địa chỉ chi nhánh trong modal
+  const [isDarkMode, setIsDarkMode] = useState(false); // State quản lý dark mode
   const router = useRouter(); // Hook điều hướng
 
   useEffect(() => { // Hook để tải dữ liệu khi màn hình khởi tạo
     loadData(); // Gọi hàm tải dữ liệu (Trang_chủ_chung)
+    loadDarkModeState(); // Load dark mode state
   }, []); // Chỉ chạy một lần khi mount
 
   useFocusEffect( // Hook để tải lại dữ liệu khi màn hình được focus
@@ -28,6 +31,29 @@ export default function MainScreen() {
       loadData(); // Tải lại dữ liệu mỗi khi quay lại màn hình (để cập nhật hồ sơ mới)
     }, [])
   );
+
+  // Load dark mode state từ AsyncStorage
+  const loadDarkModeState = async () => {
+    try {
+      const savedDarkMode = await AsyncStorage.getItem('isDarkMode');
+      if (savedDarkMode !== null) {
+        setIsDarkMode(JSON.parse(savedDarkMode));
+      }
+    } catch (error) {
+      console.log('Error loading dark mode:', error);
+    }
+  };
+
+  // Toggle dark mode và save state
+  const toggleDarkMode = async () => {
+    try {
+      const newValue = !isDarkMode;
+      setIsDarkMode(newValue);
+      await AsyncStorage.setItem('isDarkMode', JSON.stringify(newValue));
+    } catch (error) {
+      console.log('Error saving dark mode:', error);
+    }
+  };
 
   const loadData = async () => { // Hàm tải dữ liệu người dùng và chi nhánh
     try {
@@ -74,6 +100,17 @@ export default function MainScreen() {
 
   const handleEditProfile = () => { // Hàm mở màn hình chỉnh sửa hồ sơ (business only)
     router.push({ pathname: '/EditProfile', params: { userData: JSON.stringify(userData) } }); // Điều hướng đến EditProfileScreen
+  };
+
+  const handleBranchPress = (branch) => { // Hàm xử lý khi nhấn vào card chi nhánh
+    // Lưu thông tin chi nhánh đã chọn vào AsyncStorage hoặc context
+    router.push({ 
+      pathname: '/BranchHome', // Điều hướng đến màn hình HomeScreen với bottom tabs
+      params: { 
+        branchData: JSON.stringify(branch), // Truyền thông tin chi nhánh
+        userData: JSON.stringify(userData) // Truyền thông tin người dùng
+      } 
+    }); 
   };
 
   const handleAddBranch = () => { // Hàm mở modal thêm chi nhánh mới (business only)
@@ -151,17 +188,27 @@ export default function MainScreen() {
 
   if (loading) { // Nếu đang tải, hiển thị loading
     return (
-      <View style={styles.center}> {/* Container căn giữa cho loading */}
-        <Text style={styles.loadingText}>Đang tải...</Text> {/* Văn bản loading */}
+      <View style={[styles.center, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white }]}> {/* Container căn giữa cho loading */}
+        <Text style={[styles.loadingText, { color: isDarkMode ? Colors.darkText : Colors.black }]}>Đang tải...</Text> {/* Văn bản loading */}
       </View>
     );
   }
 
   return (
-    <View style={styles.container}> {/* Container chính */}
-      <View style={styles.header}> {/* Header hiển thị thông tin người dùng */}
-        <Text style={styles.headerText}>Xin chào, {userData?.ten}</Text> {/* Chào mừng người dùng */}
-        <Text style={styles.email}>{userData?.email}</Text> {/* Hiển thị email */}
+    <View style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white }]}> {/* Container chính */}
+      <View style={[styles.header, { backgroundColor: isDarkMode ? Colors.darkSurface : Colors.background }]}> {/* Header hiển thị thông tin người dùng */}
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={[styles.headerText, { color: isDarkMode ? Colors.darkText : Colors.black }]}>Xin chào, {userData?.ten}</Text> {/* Chào mừng người dùng */}
+            <Text style={[styles.email, { color: isDarkMode ? Colors.darkSecondary : Colors.gray }]}>{userData?.email}</Text> {/* Hiển thị email */}
+          </View>
+          <TouchableOpacity 
+            style={[styles.darkModeButton, { backgroundColor: isDarkMode ? Colors.darkGreen : Colors.lightGreen }]}
+            onPress={toggleDarkMode}
+          >
+            <Text style={styles.darkModeIcon}>{isDarkMode ? '🌙' : '☀️'}</Text>
+          </TouchableOpacity>
+        </View>
         {userData?.loai_tai_khoan === 'business' && ( // Nếu là business, hiển thị nút chỉnh sửa hồ sơ
           <Button title="Chỉnh sửa hồ sơ" onPress={handleEditProfile} color={Colors.primary} /> // Nút mở EditProfileScreen
         )}
@@ -171,18 +218,35 @@ export default function MainScreen() {
         data={branches} // Dữ liệu chi nhánh
         keyExtractor={(item) => item._id.toString()} // Key cho từng item (dùng _id từ MongoDB)
         renderItem={({ item }) => ( // Render mỗi chi nhánh
-          <View style={styles.branchItem}> {/* Card chi nhánh */}
-            <Text style={styles.branchName}>{item.ten}</Text> {/* Tên chi nhánh */}
-            <Text style={styles.branchAddress}>{item.diachi}</Text> {/* Địa chỉ chi nhánh */}
+          <TouchableOpacity 
+            style={[styles.branchItem, { 
+              backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+              borderColor: isDarkMode ? Colors.darkBackground : '#e1e5e9'
+            }]} // Card chi nhánh có thể nhấn
+            onPress={() => handleBranchPress(item)} // Nhấn vào card chi nhánh để vào HomeScreen
+            activeOpacity={0.8} // Hiệu ứng nhấn
+          >
+            <Text style={[styles.branchName, { color: isDarkMode ? Colors.darkText : Colors.black }]}>{item.ten}</Text> {/* Tên chi nhánh */}
+            <Text style={[styles.branchAddress, { color: isDarkMode ? Colors.darkSecondary : Colors.gray }]}>{item.diachi}</Text> {/* Địa chỉ chi nhánh */}
             {userData?.loai_tai_khoan === 'business' ? ( // Nếu là business, hiển thị nút quản lý (Dashboard_business)
               <>
               <View style={{height: 4}}></View>
-                <Button title="Sửa" onPress={() => handleEditBranch(item)} color={Colors.primary} /> {/* Nút sửa */}
-                  <View style={{height: 4}}></View>
-                <Button title="Xóa" onPress={() => handleDeleteBranch(item)} color={Colors.accent} /> {/* Nút xóa */}
+                <TouchableOpacity 
+                  style={styles.actionButton} // Style cho nút hành động
+                  onPress={(e) => { e.stopPropagation(); handleEditBranch(item); }} // Ngăn sự kiện truyền lên card
+                >
+                  <Text style={styles.actionButtonText}>Sửa</Text>
+                </TouchableOpacity>
+                <View style={{height: 4}}></View>
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.deleteButton]} // Style cho nút xóa
+                  onPress={(e) => { e.stopPropagation(); handleDeleteBranch(item); }} // Ngăn sự kiện truyền lên card
+                >
+                  <Text style={styles.deleteButtonText}>Xóa</Text>
+                </TouchableOpacity>
               </>
             ) : null} {/* Personal không có nút quản lý (Dashboard_personal) */}
-          </View>
+          </TouchableOpacity>
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />} // Kéo để làm mới danh sách
       /> {/* Kết thúc FlatList */}
@@ -202,22 +266,32 @@ export default function MainScreen() {
           onPress={() => setShowAddModal(false)} // Đóng modal khi nhấn vào vùng ngoài
         >
           <TouchableOpacity 
-            style={styles.modalContent} // Nội dung modal
+            style={[styles.modalContent, { backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white }]} // Nội dung modal
             activeOpacity={1} // Không thay đổi độ trong suốt
             onPress={(e) => e.stopPropagation()} // Ngăn không cho sự kiện truyền lên parent
           >
-            <Text style={styles.modalTitle}>Thêm chi nhánh</Text> {/* Tiêu đề modal */}
+            <Text style={[styles.modalTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>Thêm chi nhánh</Text> {/* Tiêu đề modal */}
             
             <TextInput
-              style={styles.modalInput} // Style input
+              style={[styles.modalInput, { 
+                backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]} // Style input
               placeholder="Tên chi nhánh" // Placeholder cho tên
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
               value={branchName} // Giá trị tên chi nhánh
               onChangeText={setBranchName} // Cập nhật tên chi nhánh
             />
             
             <TextInput
-              style={styles.modalInput} // Style input
+              style={[styles.modalInput, { 
+                backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]} // Style input
               placeholder="Địa chỉ chi nhánh" // Placeholder cho địa chỉ
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
               value={branchAddress} // Giá trị địa chỉ chi nhánh
               onChangeText={setBranchAddress} // Cập nhật địa chỉ chi nhánh
               multiline // Cho phép nhiều dòng
@@ -445,5 +519,42 @@ const styles = StyleSheet.create({ // Style cho giao diện
     textAlign: 'center', 
     fontStyle: 'italic',
     marginBottom: 20
+  },
+  // Action button styles
+  actionButton: { // Style cho nút hành động trong card chi nhánh
+    backgroundColor: Colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center'
+  },
+  deleteButton: { // Style riêng cho nút xóa
+    backgroundColor: '#dc3545'
+  },
+  actionButtonText: { // Text cho nút hành động
+    color: Colors.white,
+    fontWeight: 'bold',
+    fontSize: 14
+  },
+  deleteButtonText: { // Text cho nút xóa
+    color: Colors.white,
+    fontWeight: 'bold',
+    fontSize: 14
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  darkModeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  darkModeIcon: {
+    fontSize: 20,
   }
 });
