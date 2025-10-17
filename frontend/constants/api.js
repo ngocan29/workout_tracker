@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:5000', // Backend chạy trên port 5000
+  BASE_URL: 'http://192.168.1.124:5000', // Backend chạy trên port 5000
   ENDPOINTS: {
     // Auth endpoints (không có prefix /api)
     LOGIN: '/auth/login',

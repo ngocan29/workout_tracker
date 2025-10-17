@@ -31,6 +31,28 @@ app.use(bodyParser.json());
 // Connect to MongoDB
 connectDB();
 
+// Health check route
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Workout Tracker API Server',
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      '/auth/login',
+      '/auth/register', 
+      '/users',
+      '/chinhanh',
+      '/nhanvien',
+      '/khachhang',
+      '/baitap',
+      '/muctieu',
+      '/dinhduong',
+      '/sodocothe',
+      '/lichhen'
+    ]
+  });
+});
+
 // Mount routes (không có prefix /api)
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
@@ -43,4 +65,18 @@ app.use('/dinhduong', dinhduongRoutes);
 app.use('/sodocothe', sodocotheRoutes);
 app.use('/lichhen', lichhenRoutes);
 
-app.listen(process.env.PORT || 5000, () => console.log(`Server running on port ${process.env.PORT || 5000}`));
+const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0'; // Listen on all network interfaces
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Workout Tracker Server running on http://${HOST}:${PORT}`);
+  console.log(`📱 Local access: http://localhost:${PORT}`);
+  console.log(`🌐 Network access: http://192.168.1.124:${PORT}`);
+  console.log(`✅ Available endpoints:`);
+  console.log(`  - http://192.168.1.124:${PORT}/users`);
+  console.log(`  - http://192.168.1.124:${PORT}/auth/login`);
+  console.log(`  - http://192.168.1.124:${PORT}/chinhanh`);
+  console.log(`  - http://192.168.1.124:${PORT}/khachhang`);
+  console.log(`  - http://192.168.1.124:${PORT}/nhanvien`);
+  console.log(`\n🔥 Ready for production use!`);
+});
