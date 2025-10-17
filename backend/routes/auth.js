@@ -6,7 +6,14 @@ const bcrypt = require('bcrypt');
 // Đăng ký
 router.post('/register', async (req, res) => {
   try {
-    const { ten, loai_tai_khoan, email, sodienthoai, diachi, nguoidaidien, matkhau } = req.body;
+    console.log('📝 Register request received:', req.body);
+    const { ten, loai_tai_khoan, email, sodienthoai, diachi, nguoidaidien, matkhau, ngayvao, chuoi } = req.body;
+    
+    // Validation số điện thoại
+    if (sodienthoai && !/^[0-9]{10,11}$/.test(sodienthoai)) {
+      console.log('❌ Invalid phone number:', sodienthoai);
+      return res.status(400).json({ error: `Số điện thoại không hợp lệ: ${sodienthoai}. Phải có 10-11 chữ số.` });
+    }
     
     // Kiểm tra email đã tồn tại
     const existingUser = await User.findOne({ email });
@@ -25,22 +32,25 @@ router.post('/register', async (req, res) => {
       diachi,
       nguoidaidien,
       matkhau: hashedPassword,
-      ngayvao: new Date(),
-      chuoi: 0,
+      ngayvao: ngayvao || new Date(),
+      chuoi: chuoi || 0,
       trangthai: 'active'
     });
     
+    console.log('💾 Saving user:', { ten, email, sodienthoai, loai_tai_khoan });
     await user.save();
     
     // Không trả về mật khẩu
     const userResponse = user.toObject();
     delete userResponse.matkhau;
     
+    console.log('✅ User registered successfully:', userResponse._id);
     res.status(201).json({ 
       message: 'User registered successfully', 
       user: userResponse 
     });
   } catch (error) {
+    console.error('❌ Register error:', error.message);
     res.status(400).json({ error: error.message });
   }
 });

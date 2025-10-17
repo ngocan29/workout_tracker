@@ -47,7 +47,7 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       console.log('Attempting login with:', { email, password: '***' });
-      console.log('API Base URL:', 'http://localhost:5000');
+      console.log('AuthService object:', AuthService);
       
       const response = await AuthService.login(email, password); // Gọi API đăng nhập thật
       console.log('Login response:', response);

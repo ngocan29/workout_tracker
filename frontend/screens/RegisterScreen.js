@@ -62,6 +62,12 @@ export default function RegisterScreen() {
       return;
     }
 
+    // Validation số điện thoại
+    if (phone && (!/^[0-9]{10,11}$/.test(phone))) {
+      Alert.alert('Lỗi', 'Số điện thoại phải có 10-11 chữ số');
+      return;
+    }
+
     try {
       setLoading(true);
       
@@ -70,6 +76,8 @@ export default function RegisterScreen() {
         email,
         matkhau: password,
         loai_tai_khoan: accountType,
+        ngayvao: new Date().toISOString(), // Thêm ngày vào
+        chuoi: 0, // Thêm chuỗi mặc định
       };
       
       if (accountType === 'business') {
@@ -84,8 +92,8 @@ export default function RegisterScreen() {
         data = {
           ...data,
           ten: name, // tên cá nhân
-          diachi: address || 'N/A',
-          sodienthoai: phone || '0000000000',
+          diachi: address || 'Chưa cập nhật',
+          sodienthoai: phone || '0000000000', // 10 chữ số hợp lệ
         };
       }
       
@@ -182,18 +190,52 @@ export default function RegisterScreen() {
                 borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
                 color: isDarkMode ? Colors.darkText : Colors.black
               }]}
-              placeholder="Số điện thoại"
+              placeholder="Số điện thoại (10-11 chữ số)"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
               value={phone}
               onChangeText={setPhone}
+              keyboardType="numeric"
+              maxLength={11}
             />
           </>
         ) : (
-          <TextInput
-            style={styles.input}
-            placeholder="Tên đầy đủ"
-            value={name}
-            onChangeText={setName}
-          />
+          <>
+            <TextInput
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
+              placeholder="Tên đầy đủ"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+              value={name}
+              onChangeText={setName}
+            />
+            <TextInput
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
+              placeholder="Số điện thoại (tùy chọn, 10-11 chữ số)"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="numeric"
+              maxLength={11}
+            />
+            <TextInput
+              style={[styles.input, { 
+                backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+                borderColor: isDarkMode ? Colors.darkSecondary : '#ddd',
+                color: isDarkMode ? Colors.darkText : Colors.black
+              }]}
+              placeholder="Địa chỉ (tùy chọn)"
+              placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+              value={address}
+              onChangeText={setAddress}
+            />
+          </>
         )}
         <TextInput
           style={styles.input}
