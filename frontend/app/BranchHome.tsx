@@ -17,15 +17,16 @@ export default function BranchHome() {
   const parsedBranchData = branchData && typeof branchData === 'string' ? JSON.parse(branchData) : null; // Parse dữ liệu chi nhánh
   const parsedUserData = userData && typeof userData === 'string' ? JSON.parse(userData) : null; // Parse dữ liệu người dùng
   
-  const [currentScreen, setCurrentScreen] = useState('home'); // State quản lý màn hình hiện tại
-  const [isDarkMode, setIsDarkMode] = useState(false); // State quản lý dark mode
-  
   // Kiểm tra loại tài khoản business (support cả format cũ và mới)
   const isBusiness = parsedUserData?.loaitaikhoan === 'business' || parsedUserData?.loai_tai_khoan === 'business';
+  
+  const [currentScreen, setCurrentScreen] = useState('home'); // State quản lý màn hình hiện tại
+  const [isDarkMode, setIsDarkMode] = useState(false); // State quản lý dark mode
   
   // Debug log
   console.log('BranchHome - parsedUserData:', parsedUserData);
   console.log('BranchHome - isBusiness:', isBusiness);
+  console.log('BranchHome - currentScreen:', currentScreen);
 
   // Load dark mode state từ AsyncStorage khi component mount
   useEffect(() => {
@@ -132,7 +133,7 @@ export default function BranchHome() {
         <BottomTabBar 
           currentScreen={currentScreen} // Truyền màn hình hiện tại
           setCurrentScreen={setCurrentScreen} // Truyền hàm thay đổi màn hình
-          branchName={parsedBranchData?.ten} // Truyền tên chi nhánh để hiển thị
+          branchName={isBusiness ? parsedBranchData?.ten : null} // Chỉ hiển thị tên chi nhánh cho business user
           isDarkMode={isDarkMode} // Truyền dark mode state
           isBusiness={isBusiness} // Truyền trạng thái business user
         />

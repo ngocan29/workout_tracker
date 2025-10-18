@@ -54,11 +54,24 @@ export default function LoginScreen() {
       
       if (response && response.user) { // Nếu thành công
         console.log('Login successful, user type:', response.user.loai_tai_khoan);
+        
+        // Lưu thông tin user vào AsyncStorage
+        await AsyncStorage.setItem('userData', JSON.stringify(response.user));
+        await AsyncStorage.setItem('userId', response.user._id || response.user.id);
+        
+        // Kiểm tra admin
+        if (email === 'la@gmail.com' && password === 'lawt123456') {
+          console.log('Admin login detected');
+          router.replace('/MainScreen'); // Admin vào thẳng MainScreen
+        }
         // Kiểm tra loại tài khoản và điều hướng phù hợp
-        if (response.user.loai_tai_khoan === 'business') {
+        else if (response.user.loai_tai_khoan === 'business') {
           router.replace('/MainScreen'); // Chuyển đến MainScreen cho business
         } else {
-          router.replace('/app-example/app/(tabs)/'); // Chuyển đến tabs cho personal
+          // Personal user vào BranchHome với userData
+          const userDataParam = encodeURIComponent(JSON.stringify(response.user));
+          console.log('Navigating to BranchHome for personal user');
+          router.replace(`/BranchHome?userData=${userDataParam}`); // Chuyển đến BranchHome cho personal
         }
       }
     } catch (error) {
