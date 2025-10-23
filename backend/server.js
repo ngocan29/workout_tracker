@@ -71,12 +71,12 @@ const HOST = '0.0.0.0'; // Listen on all network interfaces
 app.listen(PORT, HOST, () => {
   console.log(`🚀 Workout Tracker Server running on http://${HOST}:${PORT}`);
   console.log(`📱 Local access: http://localhost:${PORT}`);
-  console.log(`🌐 Network access: http://192.168.1.124:${PORT}`);
+  console.log(`🌐 Network access: http://192.168.1.19:${PORT}`);
   console.log(`✅ Available endpoints:`);
-  console.log(`  - http://192.168.1.124:${PORT}/users`);
-  console.log(`  - http://192.168.1.124:${PORT}/auth/login`);
-  console.log(`  - http://192.168.1.124:${PORT}/chinhanh`);
-  console.log(`  - http://192.168.1.124:${PORT}/khachhang`);
-  console.log(`  - http://192.168.1.124:${PORT}/nhanvien`);
+  console.log(`  - http://192.168.1.19:${PORT}/users`);
+  console.log(`  - http://192.168.1.19:${PORT}/auth/login`);
+  console.log(`  - http://192.168.1.19:${PORT}/chinhanh`);
+  console.log(`  - http://192.168.1.19:${PORT}/khachhang`);
+  console.log(`  - http://192.168.1.19:${PORT}/nhanvien`);
   console.log(`\n🔥 Ready for production use!`);
 });

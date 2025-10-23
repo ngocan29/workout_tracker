@@ -10,11 +10,13 @@ const baitapSchema = new mongoose.Schema({
   loiich: { type: [Object], required: true },
   trangthai: { type: String, enum: ['hoanthanh', 'chuahoanthanh'], required: true },
   thongke: { type: Number, min: 0 },
-  khachhangID: { type: mongoose.Schema.Types.ObjectId },
-  nhanvienID: { type: mongoose.Schema.Types.ObjectId },
-  userID: { type: mongoose.Schema.Types.ObjectId },
+  khachhangID: { type: mongoose.Schema.Types.ObjectId, ref: 'KhachHang' },
+  nhanvienID: { type: mongoose.Schema.Types.ObjectId, ref: 'NhanVien' },
+  userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   ngaytao: { type: Date, required: true },
-  ngaycapnhat: { type: Date }
+  ngaycapnhat: { type: Date },
+
+  danhmuc: { type: mongoose.Schema.Types.ObjectId, ref: 'DanhMuc' } //lien ket toi danh muc
 }, { collection: 'baitap' });
 
 baitapSchema.index({ khachhangID: 1 });
