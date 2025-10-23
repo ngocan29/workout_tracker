@@ -10,10 +10,13 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Card, Button, FAB, Avatar, Searchbar, DataTable, Chip } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../app-example/constants/Colors';
+import { AuthService, EmployeeService } from '../services/api'; // Import both services
 
 const { width } = Dimensions.get('window');
 const isTablet = width > 768;
@@ -24,38 +27,71 @@ export default function EmployeesScreen({ isDarkMode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Load employees from API
+  const loadEmployees = async () => {
+    try {
+      setLoading(true);
+      const response = await EmployeeService.getAllEmployees();
+      
+      // Transform API data to match frontend format
+      const transformedEmployees = response.map(employee => ({
+        id: employee._id,
+        fullName: employee.userID?.ten || 'N/A',
+        email: employee.userID?.email || 'N/A',
+        phone: employee.userID?.sodienthoai || 'N/A',
+        address: employee.userID?.diachi || 'N/A',
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.userID?.ten || 'User')}&background=random`,
+        joinDate: new Date(employee.ngaybatdau).toLocaleDateString('vi-VN'),
+        position: employee.chucvu || 'Nhân viên',
+        salary: employee.luong || '0',
+        status: employee.trangthai || 'active',
+        // Additional employee fields
+        workingHours: employee.giolamviec || 'N/A',
+        experience: employee.kinhnghiem || 'N/A'
+      }));
+      
+      setEmployees(transformedEmployees);
+    } catch (error) {
+      console.error('Error loading employees:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh sách nhân viên');
+      
+      // Fallback to sample data if API fails
+      const sampleEmployees = [
+        {
+          id: '1',
+          fullName: 'Phạm Thành Đạt',
+          email: 'phamthanhdat@gmail.com',
+          phone: '0903456789',
+          address: '789 Lê Văn Sỹ, Q3, HCM',
+          avatar: 'https://ui-avatars.com/api/?name=Pham+Thanh+Dat&background=random',
+          joinDate: '01/12/2023',
+          position: 'PT Manager',
+          salary: '15000000',
+          status: 'active'
+        },
+        {
+          id: '2', 
+          fullName: 'Lê Thị Mai',
+          email: 'lethimai@gmail.com',
+          phone: '0908765432',
+          address: '321 Pasteur, Q1, HCM',
+          avatar: 'https://ui-avatars.com/api/?name=Le+Thi+Mai&background=random',
+          joinDate: '10/01/2024',
+          position: 'Personal Trainer',
+          salary: '12000000',
+          status: 'active'
+        },
+      ];
+      setEmployees(sampleEmployees);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Sample data - replace with API calls
-    const sampleEmployees = [
-      {
-        id: '1',
-        fullName: 'Phạm Thành Đạt',
-        email: 'phamthanhdat@gmail.com',
-        phone: '0903456789',
-        address: '789 Lê Văn Sỹ, Q3, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Pham+Thanh+Dat&background=random',
-        joinDate: '2023-12-01',
-        position: 'PT Manager',
-        salary: '15000000',
-        status: 'active'
-      },
-      {
-        id: '2', 
-        fullName: 'Lê Thị Mai',
-        email: 'lethimai@gmail.com',
-        phone: '0908765432',
-        address: '321 Pasteur, Q1, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Le+Thi+Mai&background=random',
-        joinDate: '2024-01-10',
-        position: 'Personal Trainer',
-        salary: '12000000',
-        status: 'active'
-      },
-    ];
-    
-    // TODO: Replace with actual API call
-    setEmployees(sampleEmployees);
+    loadEmployees();
   }, []);
 
   useEffect(() => {
@@ -92,8 +128,20 @@ export default function EmployeesScreen({ isDarkMode }) {
         { 
           text: 'Xóa', 
           style: 'destructive',
-          onPress: () => {
-            setEmployees(prev => prev.filter(e => e.id !== employeeId));
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await EmployeeService.deleteEmployee(employeeId);
+              
+              // Remove from local state
+              setEmployees(prev => prev.filter(e => e.id !== employeeId));
+              Alert.alert('Thành công', 'Đã xóa nhân viên');
+            } catch (error) {
+              console.error('Error deleting employee:', error);
+              Alert.alert('Lỗi', 'Không thể xóa nhân viên');
+            } finally {
+              setLoading(false);
+            }
           }
         }
       ]
@@ -297,7 +345,14 @@ export default function EmployeesScreen({ isDarkMode }) {
 
       {/* Content */}
       <View style={styles.content}>
-        {isTablet ? renderTableView() : (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.darkGreen} />
+            <Text style={[styles.loadingText, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+              Đang tải dữ liệu...
+            </Text>
+          </View>
+        ) : isTablet ? renderTableView() : (
           <FlatList
             data={filteredEmployees}
             renderItem={renderEmployeeCard}
@@ -323,24 +378,37 @@ export default function EmployeesScreen({ isDarkMode }) {
           employee={selectedEmployee}
           isDarkMode={isDarkMode}
           onClose={() => setShowAddModal(false)}
-          onSave={(employeeData) => {
-            if (selectedEmployee) {
-              // Update existing employee
-              setEmployees(prev => 
-                prev.map(e => e.id === selectedEmployee.id ? { ...e, ...employeeData } : e)
-              );
-            } else {
-              // Add new employee
-              const newEmployee = {
-                id: Date.now().toString(),
-                ...employeeData,
-                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(employeeData.fullName)}&background=random`,
-                joinDate: new Date().toLocaleDateString('vi-VN'),
-                status: 'active'
-              };
-              setEmployees(prev => [newEmployee, ...prev]);
+          onSave={async (employeeData) => {
+            try {
+              setLoading(true);
+              
+              if (selectedEmployee) {
+                // Update existing employee
+                await EmployeeService.updateEmployee(selectedEmployee.id, employeeData);
+                setEmployees(prev => 
+                  prev.map(e => e.id === selectedEmployee.id ? { ...e, ...employeeData } : e)
+                );
+                Alert.alert('Thành công', 'Đã cập nhật thông tin nhân viên');
+              } else {
+                // Add new employee
+                const response = await EmployeeService.createEmployee(employeeData);
+                const newEmployee = {
+                  id: response._id || Date.now().toString(),
+                  ...employeeData,
+                  avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(employeeData.fullName)}&background=random`,
+                  joinDate: new Date().toLocaleDateString('vi-VN'),
+                  status: 'active'
+                };
+                setEmployees(prev => [newEmployee, ...prev]);
+                Alert.alert('Thành công', 'Đã thêm nhân viên mới');
+              }
+              setShowAddModal(false);
+            } catch (error) {
+              console.error('Error saving employee:', error);
+              Alert.alert('Lỗi', 'Không thể lưu thông tin nhân viên');
+            } finally {
+              setLoading(false);
             }
-            setShowAddModal(false);
           }}
         />
       )}
@@ -364,6 +432,33 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
   const [showBodyMeasurementModal, setShowBodyMeasurementModal] = useState(false);
   const [hasNutritionData, setHasNutritionData] = useState(false);
   const [hasBodyMeasurements, setHasBodyMeasurements] = useState(false);
+  const [isSearchingEmail, setIsSearchingEmail] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Get current user data to check permissions
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('userData');
+        if (userData) {
+          setCurrentUser(JSON.parse(userData));
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error);
+      }
+    };
+    getCurrentUser();
+  }, [visible]);
+
+  // Check if current user can edit body measurements and nutrition
+  const canEditBodyData = () => {
+    if (!currentUser) return false;
+    // Only personal users can edit their own body data, or the employee themselves
+    // Business users cannot edit employee's body measurements and nutrition
+    return currentUser.loai_tai_khoan === 'personal' || 
+           (employee && currentUser._id === employee.userID) || 
+           !employee; // Allow when adding new employee
+  };
 
   useEffect(() => {
     if (employee) {
@@ -380,15 +475,58 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
       });
       setHasNutritionData(!!employee.height && !!employee.weight);
       setHasBodyMeasurements(employee.bodyMeasurements?.length > 0);
+    } else {
+      // Reset form for new employee
+      setForm({
+        fullName: '',
+        email: '',
+        phone: '',
+        address: '',
+        position: '',
+        salary: '',
+        height: '',
+        weight: '',
+        bodyMeasurements: []
+      });
+      setHasNutritionData(false);
+      setHasBodyMeasurements(false);
     }
-  }, [employee]);
+  }, [employee, visible]);
 
-  const handleSave = () => {
-    if (!form.fullName || !form.email || !form.phone || !form.position) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin bắt buộc');
-      return;
+  const searchUserByEmail = async (email) => {
+    if (!email || !email.includes('@')) return;
+    
+    try {
+      setIsSearchingEmail(true);
+      const userResponse = await AuthService.searchUserByEmail(email);
+      
+      if (userResponse) {
+        // Auto-fill form with user data
+        setForm(prev => ({
+          ...prev,
+          fullName: userResponse.ten || prev.fullName,
+          phone: userResponse.sodienthoai || prev.phone,
+          address: userResponse.diachi || prev.address,
+        }));
+        
+        Alert.alert('Thành công', 'Đã tìm thấy thông tin người dùng và tự động điền vào form');
+      }
+    } catch (error) {
+      // Don't show error for user not found - it's normal
+      console.log('User search result:', error.message);
+    } finally {
+      setIsSearchingEmail(false);
     }
-    onSave(form);
+  };
+
+  const handleEmailChange = (text) => {
+    setForm(prev => ({ ...prev, email: text }));
+  };
+
+  const handleEmailBlur = () => {
+    if (form.email) {
+      searchUserByEmail(form.email);
+    }
   };
 
   const handleUpdateNutrition = () => {
@@ -424,7 +562,13 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
           }]}>
             {employee ? 'Sửa Nhân Viên' : 'Thêm Nhân Viên'}
           </Text>
-          <TouchableOpacity onPress={handleSave}>
+          <TouchableOpacity onPress={() => {
+            if (!form.fullName || !form.email || !form.phone || !form.position) {
+              Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin bắt buộc');
+              return;
+            }
+            onSave(form);
+          }}>
             <Text style={[styles.saveButton, { color: Colors.darkGreen }]}>Lưu</Text>
           </TouchableOpacity>
         </View>
@@ -452,18 +596,27 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
                 onChangeText={(text) => setForm(prev => ({ ...prev, fullName: text }))}
               />
 
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
-                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                }]}
-                placeholder="Email *"
-                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={form.email}
-                onChangeText={(text) => setForm(prev => ({ ...prev, email: text }))}
-                keyboardType="email-address"
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                    color: isDarkMode ? Colors.darkText : Colors.black,
+                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                  }]}
+                  placeholder="Email * (nhập email để tự động tìm thông tin)"
+                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                  value={form.email}
+                  onChangeText={handleEmailChange}
+                  onBlur={handleEmailBlur}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                {isSearchingEmail && (
+                  <View style={styles.searchingIndicator}>
+                    <Text style={{ fontSize: 12, color: Colors.primary }}>🔍 Đang tìm kiếm...</Text>
+                  </View>
+                )}
+              </View>
 
               <TextInput
                 style={[styles.input, { 
@@ -517,7 +670,8 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
             </Card.Content>
           </Card>
 
-          {/* Thông tin thể chất */}
+          {/* Thông tin thể chất - Only show for personal users or when the employee edits their own data */}
+          {canEditBodyData() && (
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
             borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
@@ -537,37 +691,70 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
                 </Button>
               </View>
 
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={[styles.halfInput, { 
-                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                    color: isDarkMode ? Colors.darkText : Colors.black,
-                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                  }]}
-                  placeholder="Chiều cao (cm)"
-                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                  value={form.height}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, height: text }))}
-                  keyboardType="numeric"
-                />
-
-                <TextInput
-                  style={[styles.halfInput, { 
-                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                    color: isDarkMode ? Colors.darkText : Colors.black,
-                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                  }]}
-                  placeholder="Cân nặng (kg)"
-                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                  value={form.weight}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, weight: text }))}
-                  keyboardType="numeric"
-                />
-              </View>
+              {/* Column layout with corner labels for each textfield */}
+                                <View style={{ flexDirection: 'column' }}>
+                                <View style={{ marginBottom: 12 }}>
+                                  <View style={{ position: 'relative' }}>
+                                  <Text style={{
+                                    position: 'absolute',
+                                    top: -10,
+                                    left: 12,
+                                    paddingHorizontal: 6,
+                                    fontSize: 12,
+                                    color: isDarkMode ? Colors.darkSecondary : Colors.black,
+                                    backgroundColor: isDarkMode ? Colors.darkSurface : 'white'
+                                  }}>Chiều cao (cm)</Text>
+              
+                                  <TextInput
+                                    style={[styles.input, {
+                                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                                    color: isDarkMode ? Colors.darkText : Colors.black,
+                                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb',
+                                    paddingTop: 18 // give space for label
+                                    }]}
+                                    placeholder=""
+                                    placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                                    value={form.height}
+                                    onChangeText={(text) => setForm(prev => ({ ...prev, height: text }))}
+                                    keyboardType="numeric"
+                                  />
+                                  </View>
+                                </View>
+              
+                                <View style={{ marginBottom: 12 }}>
+                                  <View style={{ position: 'relative' }}>
+                                  <Text style={{
+                                    position: 'absolute',
+                                    top: -10,
+                                    left: 12,
+                                    paddingHorizontal: 6,
+                                    fontSize: 12,
+                                    color: isDarkMode ? Colors.darkSecondary : Colors.black,
+                                    backgroundColor: isDarkMode ? Colors.darkSurface : 'white'
+                                  }}>Cân nặng (kg)</Text>
+              
+                                  <TextInput
+                                    style={[styles.input, {
+                                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                                    color: isDarkMode ? Colors.darkText : Colors.black,
+                                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb',
+                                    paddingTop: 18
+                                    }]}
+                                    placeholder=""
+                                    placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                                    value={form.weight}
+                                    onChangeText={(text) => setForm(prev => ({ ...prev, weight: text }))}
+                                    keyboardType="numeric"
+                                  />
+                                  </View>
+                                </View>
+                                </View>
             </Card.Content>
           </Card>
+          )}
 
-          {/* Số đo cơ thể */}
+          {/* Số đo cơ thể - Only show for personal users or when the employee edits their own data */}
+          {canEditBodyData() && (
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
             borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
@@ -606,6 +793,7 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
               )}
             </Card.Content>
           </Card>
+          )}
         </ScrollView>
 
         {/* Body Measurement Modal */}
@@ -683,7 +871,7 @@ function BodyMeasurementModal({ visible, measurements, isDarkMode, onClose, onSa
                   color: isDarkMode ? Colors.darkText : Colors.black,
                   borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
                 }]}
-                placeholder="Tên bộ phận (VD: Vòng ngực)"
+                placeholder="Tên bộ phận (VD: Eo, Ngực, Bắp tay,...)"
                 placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
                 value={newMeasurement.name}
                 onChangeText={(text) => setNewMeasurement(prev => ({ ...prev, name: text }))}
@@ -883,6 +1071,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  searchingIndicator: {
+    position: 'absolute',
+    right: 10,
+    top: 15,
+  },
   modalContent: {
     flex: 1,
   },
@@ -956,5 +1149,15 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 50,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
   },
 });

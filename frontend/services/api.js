@@ -117,6 +117,11 @@ export const AuthService = {
       return null;
     }
   },
+
+  // Tìm kiếm user theo email
+  searchUserByEmail: async (email) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.USERS}/search?email=${encodeURIComponent(email)}`, 'GET');
+  },
 };
 
 // Branch Services
@@ -144,5 +149,120 @@ export const BranchService = {
   // Lấy chi nhánh theo company ID
   getBranchesByCompany: async (companyId) => {
     return await apiCall(`${API_CONFIG.ENDPOINTS.COMPANY_BRANCHES}/${companyId}`, 'GET');
+  },
+
+  // Lấy chi nhánh mặc định của công ty
+  getDefaultBranch: async (companyId) => {
+    return await apiCall(API_CONFIG.ENDPOINTS.DEFAULT_BRANCH.replace('{congtyID}', companyId), 'GET');
+  },
+};
+
+// Customer Services
+export const CustomerService = {
+  // Lấy tất cả khách hàng
+  getAllCustomers: async () => {
+    return await apiCall(API_CONFIG.ENDPOINTS.CUSTOMERS, 'GET');
+  },
+
+  // Lấy khách hàng theo chi nhánh
+  getCustomersByBranch: async (branchId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS_BY_BRANCH}/${branchId}`, 'GET');
+  },
+
+  // Thêm khách hàng mới
+  createCustomer: async (customerData) => {
+    const userId = await AsyncStorage.getItem('userId');
+    const dataWithUserId = { ...customerData, userId };
+    return await apiCall(API_CONFIG.ENDPOINTS.CUSTOMERS, 'POST', dataWithUserId);
+  },
+
+  // Cập nhật khách hàng
+  updateCustomer: async (customerId, customerData) => {
+    const userId = await AsyncStorage.getItem('userId');
+    const dataWithUserId = { ...customerData, userId };
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${customerId}`, 'PUT', dataWithUserId);
+  },
+
+  // Xóa khách hàng
+  deleteCustomer: async (customerId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${customerId}`, 'DELETE');
+  },
+};
+
+// Employee Services
+export const EmployeeService = {
+  // Lấy tất cả nhân viên
+  getAllEmployees: async () => {
+    return await apiCall(API_CONFIG.ENDPOINTS.EMPLOYEES, 'GET');
+  },
+
+  // Lấy nhân viên theo chi nhánh
+  getEmployeesByBranch: async (branchId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.EMPLOYEES_BY_BRANCH}/${branchId}`, 'GET');
+  },
+
+  // Thêm nhân viên mới
+  createEmployee: async (employeeData) => {
+    const userId = await AsyncStorage.getItem('userId');
+    const dataWithUserId = { ...employeeData, userId };
+    return await apiCall(API_CONFIG.ENDPOINTS.EMPLOYEES, 'POST', dataWithUserId);
+  },
+
+  // Cập nhật nhân viên
+  updateEmployee: async (employeeId, employeeData) => {
+    const userId = await AsyncStorage.getItem('userId');
+    const dataWithUserId = { ...employeeData, userId };
+    return await apiCall(`${API_CONFIG.ENDPOINTS.EMPLOYEES}/${employeeId}`, 'PUT', dataWithUserId);
+  },
+
+  // Xóa nhân viên
+  deleteEmployee: async (employeeId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.EMPLOYEES}/${employeeId}`, 'DELETE');
+  },
+};
+
+// Physical Information Services (Thông tin thể chất)
+export const PhysicalInfoService = {
+  // Lấy thông tin thể chất của khách hàng
+  getCustomerPhysicalInfo: async (customerId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${customerId}/dinhduong`, 'GET');
+  },
+
+  // Thêm thông tin thể chất cho khách hàng
+  createCustomerPhysicalInfo: async (customerId, physicalData) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${customerId}/dinhduong`, 'POST', physicalData);
+  },
+
+  // Lấy thông tin thể chất của user cá nhân
+  getPersonalPhysicalInfo: async (userId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/personal/${userId}/dinhduong`, 'GET');
+  },
+
+  // Thêm thông tin thể chất cho user cá nhân
+  createPersonalPhysicalInfo: async (userId, physicalData) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/personal/${userId}/dinhduong`, 'POST', physicalData);
+  },
+};
+
+// Body Measurements Services (Số đo cơ thể)
+export const BodyMeasurementService = {
+  // Lấy số đo cơ thể của khách hàng
+  getCustomerBodyMeasurements: async (customerId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${customerId}/sodocothe`, 'GET');
+  },
+
+  // Thêm số đo cơ thể cho khách hàng
+  createCustomerBodyMeasurements: async (customerId, measurementData) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${customerId}/sodocothe`, 'POST', measurementData);
+  },
+
+  // Lấy số đo cơ thể của user cá nhân
+  getPersonalBodyMeasurements: async (userId) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/personal/${userId}/sodocothe`, 'GET');
+  },
+
+  // Thêm số đo cơ thể cho user cá nhân
+  createPersonalBodyMeasurements: async (userId, measurementData) => {
+    return await apiCall(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/personal/${userId}/sodocothe`, 'POST', measurementData);
   },
 };

@@ -10,10 +10,13 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Card, Button, FAB, Avatar, Searchbar, DataTable } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../app-example/constants/Colors';
+import { AuthService, CustomerService, EmployeeService, BranchService, PhysicalInfoService, BodyMeasurementService } from '../services/api'; // Import all services
 
 const { width } = Dimensions.get('window');
 const isTablet = width > 768;
@@ -24,34 +27,141 @@ export default function CustomersScreen({ isDarkMode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Load customers from API
+  const loadCustomers = async () => {
+    try {
+      setLoading(true);
+      const response = await CustomerService.getAllCustomers();
+      
+      // Transform API data to match frontend format
+      const transformedCustomers = await Promise.all(response.map(async (customer) => {
+        // Load physical info for each customer
+        let physicalInfo = null;
+        let bodyMeasurements = [];
+        
+        try {
+          const physicalData = await PhysicalInfoService.getCustomerPhysicalInfo(customer._id);
+          physicalInfo = physicalData && physicalData.length > 0 ? physicalData[0] : null;
+        } catch (_error) {
+          console.log('No physical data for customer:', customer._id);
+        }
+        
+        try {
+          const measurementData = await BodyMeasurementService.getCustomerBodyMeasurements(customer._id);
+          bodyMeasurements = measurementData && measurementData.length > 0 ? measurementData[0]?.bophan || [] : [];
+        } catch (_error) {
+          console.log('No body measurements for customer:', customer._id);
+        }
+        
+        return {
+          id: customer._id,
+          userID: customer.userID?._id || customer.userID, // Include userID for permission checking
+          fullName: customer.userID?.ten || 'N/A',
+          email: customer.userID?.email || 'N/A',
+          phone: customer.userID?.sodienthoai || 'N/A',
+          address: customer.userID?.diachi || 'N/A',
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(customer.userID?.ten || 'User')}&background=random`,
+          joinDate: new Date(customer.ngaydangky).toLocaleDateString('vi-VN'),
+          status: customer.trangthai || 'active',
+          // Additional customer fields
+          points: customer.diemthuong || 0,
+          streak: customer.chuoi || 0,
+          steps: customer.buocchan || 0,
+          // Physical info from database
+          physicalInfo: physicalInfo ? {
+            height: physicalInfo.chieucao,
+            weight: physicalInfo.cannang,
+            bmi: physicalInfo.bmi,
+            calo: physicalInfo.calo,
+            protein: physicalInfo.protein,
+            carbs: physicalInfo.carbs,
+            fat: physicalInfo.fat
+          } : null,
+          bodyMeasurements: bodyMeasurements.map(bp => ({
+            name: bp.ten,
+            value: bp.sodo
+          }))
+        };
+      }));
+      
+      setCustomers(transformedCustomers);
+    } catch (error) {
+      console.error('Error loading customers:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh sách khách hàng');
+      
+      // Fallback to sample data if API fails
+      const sampleCustomers = [
+        {
+          id: '1',
+          userID: 'user1', // Sample userID for testing
+          fullName: 'Nguyễn Văn An',
+          email: 'nguyenvanan@gmail.com',
+          phone: '0901234567',
+          address: '123 Lê Lợi, Q1, HCM',
+          avatar: 'https://ui-avatars.com/api/?name=Nguyen+Van+An&background=random',
+          joinDate: '15/01/2024',
+          status: 'active',
+          points: 1250,
+          streak: 5,
+          steps: 8500
+        },
+        {
+          id: '2', 
+          userID: 'user2', // Sample userID for testing
+          fullName: 'Trần Thị Bình',
+          email: 'tranthibinh@gmail.com',
+          phone: '0907654321',
+          address: '456 Nguyễn Huệ, Q1, HCM',
+          avatar: 'https://ui-avatars.com/api/?name=Tran+Thi+Binh&background=random',
+          joinDate: '20/02/2024',
+          status: 'active',
+          points: 980,
+          streak: 3,
+          steps: 6200
+        },
+      ];
+      setCustomers(sampleCustomers);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load current user info and default branch
+  const loadCurrentUser = async () => {
+    try {
+      const userId = await AsyncStorage.getItem('userId');
+      if (userId) {
+        try {
+          // Lấy chi nhánh mặc định của user business hiện tại (congtyID = userId)
+          const defaultBranch = await BranchService.getDefaultBranch(userId);
+          setCurrentUser({ 
+            id: userId, 
+            additional_info: { 
+              chinhanhID: defaultBranch._id 
+            } 
+          });
+        } catch (_branchError) {
+          console.log('Could not load default branch, using fallback');
+          // Fallback nếu không lấy được chi nhánh
+          setCurrentUser({ id: userId, additional_info: { chinhanhID: null } });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error);
+      // Fallback
+      const userId = await AsyncStorage.getItem('userId');
+      if (userId) {
+        setCurrentUser({ id: userId, additional_info: { chinhanhID: null } });
+      }
+    }
+  };
 
   useEffect(() => {
-    // Sample data - replace with API calls
-    const sampleCustomers = [
-      {
-        id: '1',
-        fullName: 'Nguyễn Văn An',
-        email: 'nguyenvanan@gmail.com',
-        phone: '0901234567',
-        address: '123 Lê Lợi, Q1, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Nguyen+Van+An&background=random',
-        joinDate: '2024-01-15',
-        status: 'active'
-      },
-      {
-        id: '2', 
-        fullName: 'Trần Thị Bình',
-        email: 'tranthibinh@gmail.com',
-        phone: '0907654321',
-        address: '456 Nguyễn Huệ, Q1, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Tran+Thi+Binh&background=random',
-        joinDate: '2024-02-20',
-        status: 'active'
-      },
-    ];
-    
-    // TODO: Replace with actual API call
-    setCustomers(sampleCustomers);
+    loadCustomers();
+    loadCurrentUser();
   }, []);
 
   useEffect(() => {
@@ -78,7 +188,7 @@ export default function CustomersScreen({ isDarkMode }) {
     setShowAddModal(true);
   };
 
-  const handleDeleteCustomer = (customerId) => {
+  const handleDeleteCustomer = async (customerId) => {
     Alert.alert(
       'Xác nhận xóa',
       'Bạn có chắc chắn muốn xóa khách hàng này?',
@@ -87,8 +197,18 @@ export default function CustomersScreen({ isDarkMode }) {
         { 
           text: 'Xóa', 
           style: 'destructive',
-          onPress: () => {
-            setCustomers(prev => prev.filter(c => c.id !== customerId));
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await CustomerService.deleteCustomer(customerId);
+              await loadCustomers(); // Reload data
+              Alert.alert('Thành công', 'Đã xóa khách hàng');
+            } catch (error) {
+              console.error('Error deleting customer:', error);
+              Alert.alert('Lỗi', 'Không thể xóa khách hàng');
+            } finally {
+              setLoading(false);
+            }
           }
         }
       ]
@@ -267,7 +387,14 @@ export default function CustomersScreen({ isDarkMode }) {
 
       {/* Content */}
       <View style={styles.content}>
-        {isTablet ? renderTableView() : (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.darkGreen} />
+            <Text style={[styles.loadingText, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+              Đang tải dữ liệu...
+            </Text>
+          </View>
+        ) : isTablet ? renderTableView() : (
           <FlatList
             data={filteredCustomers}
             renderItem={renderCustomerCard}
@@ -293,24 +420,41 @@ export default function CustomersScreen({ isDarkMode }) {
           customer={selectedCustomer}
           isDarkMode={isDarkMode}
           onClose={() => setShowAddModal(false)}
-          onSave={(customerData) => {
-            if (selectedCustomer) {
-              // Update existing customer
-              setCustomers(prev => 
-                prev.map(c => c.id === selectedCustomer.id ? { ...c, ...customerData } : c)
-              );
-            } else {
-              // Add new customer
-              const newCustomer = {
-                id: Date.now().toString(),
-                ...customerData,
-                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(customerData.fullName)}&background=random`,
-                joinDate: new Date().toLocaleDateString('vi-VN'),
-                status: 'active'
+          onSave={async (customerData) => {
+            try {
+              setLoading(true);
+              
+              // Prepare data for API
+              const apiData = {
+                fullName: customerData.fullName,
+                email: customerData.email,
+                phone: customerData.phone,
+                address: customerData.address,
+                gender: customerData.gender,
+                nhanvienID: customerData.selectedEmployee?.id || null,
+                // Thêm vai_tro và chinhanhID cho khách hàng mới
+                vai_tro: 'khachhang',
+                chinhanhID: currentUser?.additional_info?.chinhanhID || null
               };
-              setCustomers(prev => [newCustomer, ...prev]);
+
+              if (selectedCustomer) {
+                // Update existing customer
+                await CustomerService.updateCustomer(selectedCustomer.id, apiData);
+                Alert.alert('Thành công', 'Đã cập nhật thông tin khách hàng');
+              } else {
+                // Add new customer  
+                await CustomerService.createCustomer(apiData);
+                Alert.alert('Thành công', 'Đã thêm khách hàng mới');
+              }
+              
+              await loadCustomers(); // Reload data
+              setShowAddModal(false);
+            } catch (error) {
+              console.error('Error saving customer:', error);
+              Alert.alert('Lỗi', selectedCustomer ? 'Không thể cập nhật khách hàng' : 'Không thể thêm khách hàng');
+            } finally {
+              setLoading(false);
             }
-            setShowAddModal(false);
           }}
         />
       )}
@@ -325,13 +469,96 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
     email: '',
     phone: '',
     address: '',
+    gender: 'male',
     height: '',
     weight: '',
-    bodyMeasurements: []
+    bodyMeasurements: [],
+    selectedEmployee: null,
+    employeeSearch: ''
   });
   const [showBodyMeasurementModal, setShowBodyMeasurementModal] = useState(false);
   const [hasNutritionData, setHasNutritionData] = useState(false);
   const [hasBodyMeasurements, setHasBodyMeasurements] = useState(false);
+  const [isSearchingEmail, setIsSearchingEmail] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [employeeSearchResults, setEmployeeSearchResults] = useState([]);
+  const [isSearchingEmployee, setIsSearchingEmployee] = useState(false);
+
+  // Get current user data to check permissions
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('userData');
+        if (userData) {
+          setCurrentUser(JSON.parse(userData));
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error);
+      }
+    };
+    getCurrentUser();
+  }, [visible]);
+
+  // Check if current user can edit body measurements and nutrition
+  const canEditBodyData = () => {
+    if (!currentUser) return false;
+    
+    // When adding new customer, only allow if current user is personal type
+    if (!customer) {
+      return currentUser.loai_tai_khoan === 'personal';
+    }
+    
+    // Only allow editing if:
+    // 1. Current user is personal type (customer)
+    // 2. AND current user's ID matches the customer's userID
+    // This means only the customer themselves can edit their own body data
+    return currentUser.loai_tai_khoan === 'personal' && currentUser._id === customer.userID;
+  };
+
+  // Handle employee search
+  const handleEmployeeSearch = async (searchText) => {
+    setForm(prev => ({ ...prev, employeeSearch: searchText }));
+    
+    if (searchText.length < 2) {
+      setEmployeeSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearchingEmployee(true);
+      // Load all employees and filter by name
+      const employees = await EmployeeService.getAllEmployees();
+      const filtered = employees
+        .map(emp => ({
+          id: emp._id,
+          fullName: emp.userID?.ten || 'N/A',
+          email: emp.userID?.email || 'N/A',
+          position: emp.chucvu || 'Nhân viên',
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.userID?.ten || 'User')}&background=random`
+        }))
+        .filter(emp => 
+          emp.fullName.toLowerCase().includes(searchText.toLowerCase())
+        )
+        .slice(0, 5); // Limit to 5 results
+      
+      setEmployeeSearchResults(filtered);
+    } catch (error) {
+      console.error('Error searching employees:', error);
+      setEmployeeSearchResults([]);
+    } finally {
+      setIsSearchingEmployee(false);
+    }
+  };
+
+  // Handle employee selection
+  const handleSelectEmployee = (employee) => {
+    setForm(prev => ({ 
+      ...prev, 
+      selectedEmployee: employee,
+      employeeSearch: employee.fullName
+    }));
+    setEmployeeSearchResults([]);
+  };
 
   useEffect(() => {
     if (customer) {
@@ -340,36 +567,172 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
         email: customer.email || '',
         phone: customer.phone || '',
         address: customer.address || '',
-        height: customer.height || '',
-        weight: customer.weight || '',
-        bodyMeasurements: customer.bodyMeasurements || []
+        gender: customer.gender || 'male',
+        height: customer.physicalInfo?.height?.toString() || '',
+        weight: customer.physicalInfo?.weight?.toString() || '',
+        bodyMeasurements: customer.bodyMeasurements || [],
+        selectedEmployee: customer.selectedEmployee || null,
+        employeeSearch: customer.selectedEmployee?.fullName || ''
       });
-      setHasNutritionData(!!customer.height && !!customer.weight);
-      setHasBodyMeasurements(customer.bodyMeasurements?.length > 0);
+      setHasNutritionData(!!customer.physicalInfo?.height && !!customer.physicalInfo?.weight);
+      setHasBodyMeasurements((customer.bodyMeasurements || []).length > 0);
+    } else {
+      // Reset form for new customer
+      setForm({
+        fullName: '',
+        email: '',
+        phone: '',
+        address: '',
+        gender: 'male',
+        height: '',
+        weight: '',
+        bodyMeasurements: [],
+        selectedEmployee: null,
+        employeeSearch: ''
+      });
+      setHasNutritionData(false);
+      setHasBodyMeasurements(false);
     }
-  }, [customer]);
+  }, [customer, visible]);
+
+  const searchUserByEmail = async (email) => {
+    if (!email || !email.includes('@')) return;
+    
+    try {
+      setIsSearchingEmail(true);
+      const userResponse = await AuthService.searchUserByEmail(email);
+      
+      if (userResponse) {
+        // Auto-fill form with user data
+        setForm(prev => ({
+          ...prev,
+          fullName: userResponse.ten || prev.fullName,
+          phone: userResponse.sodienthoai || prev.phone,
+          address: userResponse.diachi || prev.address,
+        }));
+        
+        Alert.alert('Thành công', 'Đã tìm thấy thông tin người dùng và tự động điền vào form');
+      }
+    } catch (error) {
+      // Don't show error for user not found - it's normal
+      console.log('User search result:', error.message);
+    } finally {
+      setIsSearchingEmail(false);
+    }
+  };
+
+  const handleEmailChange = (text) => {
+    setForm(prev => ({ ...prev, email: text }));
+  };
+
+  const handleEmailBlur = () => {
+    if (form.email) {
+      searchUserByEmail(form.email);
+    }
+  };
 
   const handleSave = () => {
     if (!form.fullName || !form.email || !form.phone) {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin bắt buộc');
       return;
     }
+    
+    // If user is not personal and trying to add body data to new customer, warn them
+    if (!customer && currentUser?.loai_tai_khoan !== 'personal' && (form.height || form.weight || form.bodyMeasurements?.length > 0)) {
+      Alert.alert(
+        'Cảnh báo', 
+        'Thông tin thể chất và số đo cơ thể sẽ không được lưu vì chỉ khách hàng mới có thể quản lý thông tin này.',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Tiếp tục', onPress: () => {
+            // Remove body data before saving
+            const formWithoutBodyData = {
+              ...form,
+              height: '',
+              weight: '',
+              bodyMeasurements: []
+            };
+            onSave(formWithoutBodyData);
+          }}
+        ]
+      );
+      return;
+    }
+    
     onSave(form);
   };
 
-  const handleUpdateNutrition = () => {
+  const handleUpdateNutrition = async () => {
+    if (!canEditBodyData()) {
+      Alert.alert('Không có quyền', 'Chỉ khách hàng mới có thể chỉnh sửa thông tin thể chất của chính mình');
+      return;
+    }
+    
     if (!form.height || !form.weight) {
       Alert.alert('Lỗi', 'Vui lòng nhập chiều cao và cân nặng');
       return;
     }
-    setHasNutritionData(true);
-    Alert.alert('Thành công', 'Đã cập nhật thông tin thể chất');
+    
+    try {
+      const physicalData = {
+        chieucao: parseFloat(form.height),
+        cannang: parseFloat(form.weight),
+        calo: 2000, // Default value, có thể tính toán dựa trên BMR
+        luongnuoc: 2.5 // Default value
+      };
+      
+      if (customer) {
+        // Update for existing customer
+        await PhysicalInfoService.createCustomerPhysicalInfo(customer.id, physicalData);
+      } else {
+        // Personal user updating their own data
+        const userId = await AsyncStorage.getItem('userId');
+        if (userId) {
+          await PhysicalInfoService.createPersonalPhysicalInfo(userId, physicalData);
+        }
+      }
+      
+      setHasNutritionData(true);
+      Alert.alert('Thành công', 'Đã cập nhật thông tin thể chất');
+    } catch (error) {
+      console.error('Error updating physical info:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật thông tin thể chất');
+    }
   };
 
-  const handleBodyMeasurementSave = (measurements) => {
-    setForm(prev => ({ ...prev, bodyMeasurements: measurements }));
-    setHasBodyMeasurements(measurements.length > 0);
-    setShowBodyMeasurementModal(false);
+  const handleBodyMeasurementSave = async (measurements) => {
+    try {
+      if (!canEditBodyData()) {
+        Alert.alert('Không có quyền', 'Chỉ khách hàng mới có thể chỉnh sửa số đo cơ thể của chính mình');
+        return;
+      }
+      
+      const measurementData = {
+        bophan: measurements.map(m => ({
+          ten: m.name,
+          sodo: parseFloat(m.value)
+        }))
+      };
+      
+      if (customer) {
+        // Update for existing customer
+        await BodyMeasurementService.createCustomerBodyMeasurements(customer.id, measurementData);
+      } else {
+        // Personal user updating their own data
+        const userId = await AsyncStorage.getItem('userId');
+        if (userId) {
+          await BodyMeasurementService.createPersonalBodyMeasurements(userId, measurementData);
+        }
+      }
+      
+      setForm(prev => ({ ...prev, bodyMeasurements: measurements }));
+      setHasBodyMeasurements(measurements.length > 0);
+      setShowBodyMeasurementModal(false);
+      Alert.alert('Thành công', 'Đã cập nhật số đo cơ thể');
+    } catch (error) {
+      console.error('Error updating body measurements:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật số đo cơ thể');
+    }
   };
 
   return (
@@ -418,18 +781,27 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
                 onChangeText={(text) => setForm(prev => ({ ...prev, fullName: text }))}
               />
 
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
-                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                }]}
-                placeholder="Email *"
-                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={form.email}
-                onChangeText={(text) => setForm(prev => ({ ...prev, email: text }))}
-                keyboardType="email-address"
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                    color: isDarkMode ? Colors.darkText : Colors.black,
+                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                  }]}
+                  placeholder="Email * (nhập email để tự động tìm thông tin)"
+                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                  value={form.email}
+                  onChangeText={handleEmailChange}
+                  onBlur={handleEmailBlur}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                {isSearchingEmail && (
+                  <View style={styles.searchingIndicator}>
+                    <Text style={{ fontSize: 12, color: Colors.primary }}>🔍 Đang tìm kiếm...</Text>
+                  </View>
+                )}
+              </View>
 
               <TextInput
                 style={[styles.input, { 
@@ -455,10 +827,146 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
                 value={form.address}
                 onChangeText={(text) => setForm(prev => ({ ...prev, address: text }))}
               />
+
+              {/* Gender Selection */}
+              <View style={[styles.genderContainer, { 
+                backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+              }]}>
+                <Text style={[styles.genderLabel, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+                  Giới tính:
+                </Text>
+                <View style={styles.genderButtons}>
+                  {[
+                    { label: 'Nam', value: 'male' },
+                    { label: 'Nữ', value: 'female' }
+                  ].map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.genderButton,
+                        {
+                          backgroundColor: form.gender === option.value 
+                            ? (isDarkMode ? Colors.darkGreen : Colors.darkGreen)
+                            : 'transparent',
+                          borderColor: isDarkMode ? Colors.darkSecondary : Colors.gray,
+                        }
+                      ]}
+                      onPress={() => setForm(prev => ({ ...prev, gender: option.value }))}
+                    >
+                      <Text style={[
+                        styles.genderButtonText,
+                        {
+                          color: form.gender === option.value 
+                            ? Colors.white
+                            : (isDarkMode ? Colors.darkText : Colors.black)
+                        }
+                      ]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             </Card.Content>
           </Card>
 
-          {/* Thông tin thể chất */}
+          {/* Chọn nhân viên phụ trách */}
+          <Card style={[styles.formSection, { 
+            backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
+            borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
+          }]}>
+            <Card.Content>
+              <Text style={[styles.sectionTitle, { 
+                color: isDarkMode ? Colors.darkText : Colors.black,
+                marginBottom: 12
+              }]}>Nhân Viên Phụ Trách</Text>
+              
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                    color: isDarkMode ? Colors.darkText : Colors.black,
+                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                  }]}
+                  placeholder="Tìm kiếm nhân viên theo tên..."
+                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                  value={form.employeeSearch || ''}
+                  onChangeText={handleEmployeeSearch}
+                />
+                
+                {isSearchingEmployee && (
+                  <ActivityIndicator 
+                    size="small" 
+                    color={Colors.darkGreen} 
+                    style={styles.searchingIndicator}
+                  />
+                )}
+              </View>
+
+              {form.selectedEmployee && (
+                <View style={[styles.selectedEmployeeCard, {
+                  backgroundColor: isDarkMode ? Colors.darkBackground : '#f0f9ff',
+                  borderColor: Colors.darkGreen
+                }]}>
+                  <Text style={[styles.selectedEmployeeText, {
+                    color: isDarkMode ? Colors.darkText : Colors.black
+                  }]}>
+                    ✓ {form.selectedEmployee.fullName} - {form.selectedEmployee.position}
+                  </Text>
+                  <TouchableOpacity onPress={() => setForm(prev => ({ ...prev, selectedEmployee: null, employeeSearch: '' }))}>
+                    <Ionicons name="close-circle" size={20} color={Colors.darkGreen} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {employeeSearchResults.length > 0 && !form.selectedEmployee && (
+                <View style={[styles.searchResults, {
+                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                }]}>
+                  <TouchableOpacity 
+                    style={[styles.searchResultItem, styles.addNewEmployeeItem]}
+                    onPress={() => {
+                      Alert.alert('Thêm nhân viên', 'Chức năng thêm nhân viên mới sẽ được triển khai. Hiện tại vui lòng chọn từ danh sách có sẵn.');
+                      setEmployeeSearchResults([]);
+                    }}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color={Colors.darkGreen} />
+                    <Text style={[styles.addNewEmployeeText, { color: Colors.darkGreen }]}>
+                      Thêm nhân viên mới
+                    </Text>
+                  </TouchableOpacity>
+                  {employeeSearchResults.map((employee) => (
+                    <TouchableOpacity 
+                      key={employee.id}
+                      style={styles.searchResultItem}
+                      onPress={() => handleSelectEmployee(employee)}
+                    >
+                      <Avatar.Image 
+                        size={30} 
+                        source={{ uri: employee.avatar }}
+                        style={{ marginRight: 8 }}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.resultEmployeeName, {
+                          color: isDarkMode ? Colors.darkText : Colors.black
+                        }]}>
+                          {employee.fullName}
+                        </Text>
+                        <Text style={[styles.resultEmployeePosition, {
+                          color: isDarkMode ? Colors.darkSecondary : Colors.gray
+                        }]}>
+                          {employee.position}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </Card.Content>
+          </Card>
+
+          {/* Thông tin thể chất - Show for all users, but only allow editing for matching userID */}
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
             borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
@@ -468,47 +976,87 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
                 <Text style={[styles.sectionTitle, { 
                   color: isDarkMode ? Colors.darkText : Colors.black 
                 }]}>Thông Tin Thể Chất</Text>
-                <Button
-                  mode={hasNutritionData ? "outlined" : "contained"}
-                  onPress={handleUpdateNutrition}
-                  style={styles.sectionButton}
-                  labelStyle={{ fontSize: 12 }}
-                >
-                  {hasNutritionData ? "Cập nhật" : "Thêm"}
-                </Button>
+                {canEditBodyData() && (
+                  <Button
+                    mode={hasNutritionData ? "outlined" : "contained"}
+                    onPress={handleUpdateNutrition}
+                    style={styles.sectionButton}
+                    labelStyle={{ fontSize: 12 }}
+                  >
+                    {hasNutritionData ? "Cập nhật" : "Thêm"}
+                  </Button>
+                )}
+                {!canEditBodyData() && customer && (
+                  <Text style={[styles.readOnlyLabel, { 
+                    color: isDarkMode ? Colors.darkSecondary : Colors.gray 
+                  }]}>Chỉ khách hàng mới có thể chỉnh sửa</Text>
+                )}
               </View>
 
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={[styles.halfInput, { 
-                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                    color: isDarkMode ? Colors.darkText : Colors.black,
-                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                  }]}
-                  placeholder="Chiều cao (cm)"
-                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                  value={form.height}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, height: text }))}
-                  keyboardType="numeric"
-                />
+              {/* Column layout with corner labels for each textfield */}
+              <View style={{ flexDirection: 'column' }}>
+                <View style={{ marginBottom: 12 }}>
+                  <View style={{ position: 'relative' }}>
+                    <Text style={{
+                      position: 'absolute',
+                      top: -10,
+                      left: 12,
+                      paddingHorizontal: 6,
+                      fontSize: 12,
+                      color: isDarkMode ? Colors.darkSecondary : Colors.black,
+                      backgroundColor: isDarkMode ? Colors.darkSurface : 'white'
+                    }}>Chiều cao (cm)</Text>
 
-                <TextInput
-                  style={[styles.halfInput, { 
-                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                    color: isDarkMode ? Colors.darkText : Colors.black,
-                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                  }]}
-                  placeholder="Cân nặng (kg)"
-                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                  value={form.weight}
-                  onChangeText={(text) => setForm(prev => ({ ...prev, weight: text }))}
-                  keyboardType="numeric"
-                />
+                    <TextInput
+                      style={[styles.input, {
+                        backgroundColor: canEditBodyData() ? (isDarkMode ? Colors.darkBackground : 'white') : (isDarkMode ? Colors.darkSecondary + '20' : '#f5f5f5'),
+                        color: isDarkMode ? Colors.darkText : Colors.black,
+                        borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb',
+                        paddingTop: 18 // give space for label
+                      }]}
+                      placeholder=""
+                      placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                      value={form.height}
+                      onChangeText={(text) => setForm(prev => ({ ...prev, height: text }))}
+                      keyboardType="numeric"
+                      editable={canEditBodyData()}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ marginBottom: 12 }}>
+                  <View style={{ position: 'relative' }}>
+                    <Text style={{
+                      position: 'absolute',
+                      top: -10,
+                      left: 12,
+                      paddingHorizontal: 6,
+                      fontSize: 12,
+                      color: isDarkMode ? Colors.darkSecondary : Colors.black,
+                      backgroundColor: isDarkMode ? Colors.darkSurface : 'white'
+                    }}>Cân nặng (kg)</Text>
+
+                    <TextInput
+                      style={[styles.input, {
+                        backgroundColor: canEditBodyData() ? (isDarkMode ? Colors.darkBackground : 'white') : (isDarkMode ? Colors.darkSecondary + '20' : '#f5f5f5'),
+                        color: isDarkMode ? Colors.darkText : Colors.black,
+                        borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb',
+                        paddingTop: 18
+                      }]}
+                      placeholder=""
+                      placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                      value={form.weight}
+                      onChangeText={(text) => setForm(prev => ({ ...prev, weight: text }))}
+                      keyboardType="numeric"
+                      editable={canEditBodyData()}
+                    />
+                  </View>
+                </View>
               </View>
             </Card.Content>
           </Card>
 
-          {/* Số đo cơ thể */}
+          {/* Số đo cơ thể - Show for all users, but only allow editing for matching userID */}
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
             borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
@@ -518,14 +1066,21 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
                 <Text style={[styles.sectionTitle, { 
                   color: isDarkMode ? Colors.darkText : Colors.black 
                 }]}>Số Đo Cơ Thể</Text>
-                <Button
-                  mode={hasBodyMeasurements ? "outlined" : "contained"}
-                  onPress={() => setShowBodyMeasurementModal(true)}
-                  style={styles.sectionButton}
-                  labelStyle={{ fontSize: 12 }}
-                >
-                  {hasBodyMeasurements ? "Cập nhật" : "Thêm"}
-                </Button>
+                {canEditBodyData() && (
+                  <Button
+                    mode={hasBodyMeasurements ? "outlined" : "contained"}
+                    onPress={() => setShowBodyMeasurementModal(true)}
+                    style={styles.sectionButton}
+                    labelStyle={{ fontSize: 12 }}
+                  >
+                    {hasBodyMeasurements ? "Cập nhật" : "Thêm"}
+                  </Button>
+                )}
+                {!canEditBodyData() && customer && (
+                  <Text style={[styles.readOnlyLabel, { 
+                    color: isDarkMode ? Colors.darkSecondary : Colors.gray 
+                  }]}>Chỉ khách hàng mới có thể chỉnh sửa</Text>
+                )}
               </View>
 
               {hasBodyMeasurements && (
@@ -545,6 +1100,12 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
                   ))}
                 </View>
               )}
+              
+              {!hasBodyMeasurements && !canEditBodyData() && customer && (
+                <Text style={[styles.noDataText, { 
+                  color: isDarkMode ? Colors.darkSecondary : Colors.gray 
+                }]}>Chưa có dữ liệu số đo cơ thể</Text>
+              )}
             </Card.Content>
           </Card>
         </ScrollView>
@@ -555,6 +1116,7 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
             visible={showBodyMeasurementModal}
             measurements={form.bodyMeasurements}
             isDarkMode={isDarkMode}
+            canEdit={canEditBodyData()}
             onClose={() => setShowBodyMeasurementModal(false)}
             onSave={handleBodyMeasurementSave}
           />
@@ -565,11 +1127,16 @@ function CustomerFormModal({ visible, customer, isDarkMode, onClose, onSave }) {
 }
 
 // Component modal số đo cơ thể
-function BodyMeasurementModal({ visible, measurements, isDarkMode, onClose, onSave }) {
+function BodyMeasurementModal({ visible, measurements, isDarkMode, canEdit = true, onClose, onSave }) {
   const [measurementList, setMeasurementList] = useState(measurements || []);
   const [newMeasurement, setNewMeasurement] = useState({ name: '', value: '' });
 
   const addMeasurement = () => {
+    if (!canEdit) {
+      Alert.alert('Không có quyền', 'Chỉ khách hàng mới có thể chỉnh sửa số đo cơ thể của chính mình');
+      return;
+    }
+    
     if (!newMeasurement.name || !newMeasurement.value) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên bộ phận và số đo');
       return;
@@ -580,10 +1147,20 @@ function BodyMeasurementModal({ visible, measurements, isDarkMode, onClose, onSa
   };
 
   const removeMeasurement = (index) => {
+    if (!canEdit) {
+      Alert.alert('Không có quyền', 'Chỉ khách hàng mới có thể chỉnh sửa số đo cơ thể của chính mình');
+      return;
+    }
+    
     setMeasurementList(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = () => {
+    if (!canEdit) {
+      Alert.alert('Không có quyền', 'Chỉ khách hàng mới có thể chỉnh sửa số đo cơ thể của chính mình');
+      return;
+    }
+    
     onSave(measurementList);
   };
 
@@ -601,58 +1178,67 @@ function BodyMeasurementModal({ visible, measurements, isDarkMode, onClose, onSa
           </TouchableOpacity>
           <Text style={[styles.modalTitle, { 
             color: isDarkMode ? Colors.darkText : Colors.black 
-          }]}>Số Đo Cơ Thể</Text>
-          <TouchableOpacity onPress={handleSave}>
-            <Text style={[styles.saveButton, { color: Colors.darkGreen }]}>Lưu</Text>
-          </TouchableOpacity>
+          }]}>
+            Số Đo Cơ Thể {!canEdit ? '(Chỉ xem)' : ''}
+          </Text>
+          {canEdit && (
+            <TouchableOpacity onPress={handleSave}>
+              <Text style={[styles.saveButton, { color: Colors.darkGreen }]}>Lưu</Text>
+            </TouchableOpacity>
+          )}
+          {!canEdit && (
+            <View style={{ width: 40 }} />
+          )}
         </View>
 
         <ScrollView style={styles.modalContent}>
-          {/* Form thêm số đo mới */}
-          <Card style={[styles.formSection, { 
-            backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
-            borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
-          }]}>
-            <Card.Content>
-              <Text style={[styles.sectionTitle, { 
-                color: isDarkMode ? Colors.darkText : Colors.black 
-              }]}>Thêm Số Đo Mới</Text>
-              
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
-                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                }]}
-                placeholder="Tên bộ phận (VD: Vòng ngực)"
-                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={newMeasurement.name}
-                onChangeText={(text) => setNewMeasurement(prev => ({ ...prev, name: text }))}
-              />
+          {/* Form thêm số đo mới - Only show if user can edit */}
+          {canEdit && (
+            <Card style={[styles.formSection, { 
+              backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
+              borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
+            }]}>
+              <Card.Content>
+                <Text style={[styles.sectionTitle, { 
+                  color: isDarkMode ? Colors.darkText : Colors.black 
+                }]}>Thêm Số Đo Mới</Text>
+                
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                    color: isDarkMode ? Colors.darkText : Colors.black,
+                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                  }]}
+                  placeholder="Tên bộ phận (VD: Eo, Ngực, Bắp tay,...)"
+                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                  value={newMeasurement.name}
+                  onChangeText={(text) => setNewMeasurement(prev => ({ ...prev, name: text }))}
+                />
 
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
-                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                }]}
-                placeholder="Số đo (cm)"
-                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={newMeasurement.value}
-                onChangeText={(text) => setNewMeasurement(prev => ({ ...prev, value: text }))}
-                keyboardType="numeric"
-              />
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                    color: isDarkMode ? Colors.darkText : Colors.black,
+                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                  }]}
+                  placeholder="Số đo (cm)"
+                  placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                  value={newMeasurement.value}
+                  onChangeText={(text) => setNewMeasurement(prev => ({ ...prev, value: text }))}
+                  keyboardType="numeric"
+                />
 
-              <Button
-                mode="contained"
-                onPress={addMeasurement}
-                style={[styles.addButton, { backgroundColor: Colors.darkGreen }]}
-                icon="plus"
-              >
-                Thêm Bộ Phận
-              </Button>
-            </Card.Content>
-          </Card>
+                <Button
+                  mode="contained"
+                  onPress={addMeasurement}
+                  style={[styles.addButton, { backgroundColor: Colors.darkGreen }]}
+                  icon="plus"
+                >
+                  Thêm Bộ Phận
+                </Button>
+              </Card.Content>
+            </Card>
+          )}
 
           {/* Danh sách số đo */}
           {measurementList.length > 0 && (
@@ -678,12 +1264,14 @@ function BodyMeasurementModal({ visible, measurements, isDarkMode, onClose, onSa
                         color: isDarkMode ? Colors.darkSecondary : Colors.gray 
                       }]}>{measurement.value} cm</Text>
                     </View>
-                    <TouchableOpacity 
-                      onPress={() => removeMeasurement(index)}
-                      style={styles.deleteButton}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                    </TouchableOpacity>
+                    {canEdit && (
+                      <TouchableOpacity 
+                        onPress={() => removeMeasurement(index)}
+                        style={styles.deleteButton}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
               </Card.Content>
@@ -818,6 +1406,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  searchingIndicator: {
+    position: 'absolute',
+    right: 10,
+    top: 15,
+  },
   modalContent: {
     flex: 1,
   },
@@ -892,4 +1485,96 @@ const styles = StyleSheet.create({
   deleteButton: {
     padding: 4,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 50,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  selectedEmployeeCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  selectedEmployeeText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  searchResults: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  addNewEmployeeItem: {
+    backgroundColor: '#f0f9ff',
+  },
+  addNewEmployeeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  resultEmployeeName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  resultEmployeePosition: {
+    fontSize: 12,
+  },
+  readOnlyLabel: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    textAlign: 'center',
+    maxWidth: 120,
+  },
+  noDataText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+  genderContainer: {
+    marginVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  genderLabel: {
+    fontSize: 16,
+    marginBottom: 10,
+    fontWeight: '500',
+  },
+  genderButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  genderButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  genderButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  }
 });

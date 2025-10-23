@@ -7,14 +7,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RegisterScreen() {
   const { accountType } = useLocalSearchParams();
-  const [name, setName] = useState('');
+  const [malee, setmalee] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [companyName, setCompanyName] = useState('');
+  const [companymalee, setCompanymalee] = useState('');
   const [address, setAddress] = useState('');
   const [taxCode, setTaxCode] = useState('');
   const [representative, setRepresentative] = useState('');
   const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState('male'); // Default gender for personal accounts
   const [loading, setLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const router = useRouter();
@@ -52,12 +53,12 @@ export default function RegisterScreen() {
       return;
     }
     
-    if (accountType === 'business' && (!companyName || !address || !representative || !phone)) {
+    if (accountType === 'business' && (!companymalee || !address || !representative || !phone)) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin doanh nghiệp');
       return;
     }
     
-    if (accountType === 'personal' && !name) {
+    if (accountType === 'personal' && !malee) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên đầy đủ');
       return;
     }
@@ -83,17 +84,19 @@ export default function RegisterScreen() {
       if (accountType === 'business') {
         data = {
           ...data,
-          ten: companyName, // tên công ty
+          ten: companymalee, // tên công ty
           diachi: address,
           nguoidaidien: representative,
           sodienthoai: phone,
+          gioitinh: 'male', // Default gender for business accounts
         };
       } else {
         data = {
           ...data,
-          ten: name, // tên cá nhân
+          ten: malee, // tên cá nhân
           diachi: address || 'Chưa cập nhật',
           sodienthoai: phone || '0000000000', // 10 chữ số hợp lệ
+          gioitinh: gender, // User selected gender for personal accounts
         };
       }
       
@@ -148,8 +151,8 @@ export default function RegisterScreen() {
               }]}
               placeholder="Tên công ty"
               placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-              value={companyName}
-              onChangeText={setCompanyName}
+              value={companymalee}
+              onChangeText={setCompanymalee}
             />
             <TextInput
               style={[styles.input, { 
@@ -208,8 +211,8 @@ export default function RegisterScreen() {
               }]}
               placeholder="Tên đầy đủ"
               placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-              value={name}
-              onChangeText={setName}
+              value={malee}
+              onChangeText={setmalee}
             />
             <TextInput
               style={[styles.input, { 
@@ -235,6 +238,43 @@ export default function RegisterScreen() {
               value={address}
               onChangeText={setAddress}
             />
+            
+            {/* Gender Selection for Personal Account */}
+            <View style={[styles.genderContainer, { 
+              backgroundColor: isDarkMode ? Colors.darkSurface : Colors.white,
+            }]}>
+              <Text style={[styles.genderLabel, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+                Giới tính:
+              </Text>
+              <View style={styles.genderButtons}>
+                {['male', 'female'].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.genderButton,
+                      {
+                        backgroundColor: gender === option 
+                          ? (isDarkMode ? Colors.darkGreen : Colors.primary)
+                          : 'transparent',
+                        borderColor: isDarkMode ? Colors.darkSecondary : Colors.gray,
+                      }
+                    ]}
+                    onPress={() => setGender(option)}
+                  >
+                    <Text style={[
+                      styles.genderButtonText,
+                      {
+                        color: gender === option 
+                          ? Colors.white
+                          : (isDarkMode ? Colors.darkText : Colors.black)
+                      }
+                    ]}>
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </>
         )}
         <TextInput
@@ -287,5 +327,32 @@ const styles = StyleSheet.create({
   },
   darkModeIcon: {
     fontSize: 20,
+  },
+  genderContainer: {
+    marginVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  genderLabel: {
+    fontSize: 16,
+    marginBottom: 10,
+    fontWeight: '500',
+  },
+  genderButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  genderButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  genderButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   }
 });

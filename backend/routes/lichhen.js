@@ -1,65 +1,60 @@
 const express = require('express');
 const router = express.Router();
-const LichHen = require('../models/LichHen');
+const Lichhen = require('../models/LichHen');
 
 router.get('/', async (req, res) => {
   try {
-    const lichhen = await LichHen.find().populate('khachhangID nhanvienID');
+    const lichhen = await Lichhen.find();
     res.json(lichhen);
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-router.get('/khachhang/:khachhangID', async (req, res) => {
-  try {
-    const lichhen = await LichHen.find({ khachhangID: req.params.khachhangID }).populate('nhanvienID');
-    res.json(lichhen);
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-router.get('/nhanvien/:nhanvienID', async (req, res) => {
-  try {
-    const lichhen = await LichHen.find({ nhanvienID: req.params.nhanvienID }).populate('khachhangID');
-    res.json(lichhen);
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 router.post('/', async (req, res) => {
+  const lichhen = new Lichhen({
+    ...req.body,
+    ngaytao: req.body.ngaytao || new Date(),
+    trangthai: req.body.trangthai || 'chualichhen'
+  });
   try {
-    const lichhen = new LichHen({
-      ...req.body,
-      ngaytao: new Date(),
-      trangthai: 'chualichhen'
-    });
-    await lichhen.save();
-    res.status(201).json(lichhen);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+    const newLichhen = await lichhen.save();
+    res.status(201).json(newLichhen);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const lichhen = await Lichhen.findById(req.params.id);
+    if (!lichhen) return res.status(404).json({ error: 'Lichhen not found' });
+    res.json(lichhen);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 router.put('/:id', async (req, res) => {
   try {
-    const lichhen = await LichHen.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!lichhen) return res.status(404).json({ error: 'Appointment not found' });
+    const lichhen = await Lichhen.findById(req.params.id);
+    if (!lichhen) return res.status(404).json({ error: 'Lichhen not found' });
+    Object.assign(lichhen, req.body);
+    await lichhen.save();
     res.json(lichhen);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
 router.delete('/:id', async (req, res) => {
   try {
-    const lichhen = await LichHen.findByIdAndDelete(req.params.id);
-    if (!lichhen) return res.status(404).json({ error: 'Appointment not found' });
-    res.json({ message: 'Appointment deleted' });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+    const lichhen = await Lichhen.findById(req.params.id);
+    if (!lichhen) return res.status(404).json({ error: 'Lichhen not found' });
+    await lichhen.remove();
+    res.json({ message: 'Lichhen deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

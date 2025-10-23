@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'http://192.168.1.124:5000', // Backend chạy trên port 5000
+  BASE_URL: 'http://192.168.1.2:5000', // Backend chạy trên port 5000
   ENDPOINTS: {
     // Auth endpoints (không có prefix /api)
     LOGIN: '/auth/login',
@@ -12,9 +12,19 @@ export const API_CONFIG = {
     BRANCHES: '/chinhanh',
     MY_BRANCHES: '/chinhanh/my-branches',
     COMPANY_BRANCHES: '/chinhanh/company',
+    DEFAULT_BRANCH: '/chinhanh/company/{congtyID}/default',
     
     // User endpoints
     USERS: '/users',
+    USERS_SEARCH: '/users/search',
+    
+    // Customer endpoints
+    CUSTOMERS: '/khachhang',
+    CUSTOMERS_BY_BRANCH: '/khachhang/chinhanh',
+    
+    // Employee endpoints
+    EMPLOYEES: '/nhanvien',
+    EMPLOYEES_BY_BRANCH: '/nhanvien/chinhanh',
   }
 };
 

@@ -18,11 +18,11 @@ echo Port 5000 opened successfully!
 echo.
 echo Your server will be accessible at:
 echo - Local: http://localhost:5000
-echo - Network: http://192.168.1.124:5000
+echo - Network: http://192.168.1.2:5000
 echo.
 echo To test from another device:
 echo 1. Make sure both devices are on the same network
 echo 2. Start the server: npm start
-echo 3. Access: http://192.168.1.124:5000
+echo 3. Access: http://192.168.1.2:5000
 echo.
 pause

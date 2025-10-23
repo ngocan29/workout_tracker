@@ -1,66 +1,71 @@
 const express = require('express');
 const router = express.Router();
-const BaiTap = require('../models/BaiTap');
+const Baitap = require('../models/BaiTap');
+const User = require('../models/User');
 
 router.get('/', async (req, res) => {
   try {
-    const baitap = await BaiTap.find().populate('khachhangID nhanvienID userID');
+    const baitap = await Baitap.find();
     res.json(baitap);
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-router.get('/khachhang/:khachhangID', async (req, res) => {
-  try {
-    const baitap = await BaiTap.find({ khachhangID: req.params.khachhangID }).populate('nhanvienID userID');
-    res.json(baitap);
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-router.get('/personal/:userID', async (req, res) => {
-  try {
-    const baitap = await BaiTap.find({ userID: req.params.userID }).populate('nhanvienID khachhangID');
-    res.json(baitap);
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 router.post('/', async (req, res) => {
+  const baitap = new Baitap({
+    ...req.body,
+    ngaytao: req.body.ngaytao || new Date(),
+    thongke: req.body.thongke || 0,
+    trangthai: req.body.trangthai || 'chuahoanthanh'
+  });
   try {
-    const baitap = new BaiTap({
-      ...req.body,
-      ngaytao: new Date(),
-      ngaycapnhat: new Date(),
-      thongke: 0
-    });
-    await baitap.save();
-    res.status(201).json(baitap);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+    const newBaitap = await baitap.save();
+    res.status(201).json(newBaitap);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const baitap = await Baitap.findById(req.params.id);
+    if (!baitap) return res.status(404).json({ error: 'Baitap not found' });
+    res.json(baitap);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 router.put('/:id', async (req, res) => {
   try {
-    const baitap = await BaiTap.findByIdAndUpdate(req.params.id, { ...req.body, ngaycapnhat: new Date() }, { new: true });
-    if (!baitap) return res.status(404).json({ error: 'Exercise not found' });
+    const baitap = await Baitap.findById(req.params.id);
+    if (!baitap) return res.status(404).json({ error: 'Baitap not found' });
+    if (req.body.trangthai === 'hoanthanh' && baitap.trangthai !== 'hoanthanh') {
+      baitap.thongke += 1;
+      if (baitap.khachhangUserID) {
+        const user = await User.findById(baitap.khachhangUserID);
+        user.diemthuong += 10;
+        await user.save();
+      }
+    }
+    Object.assign(baitap, req.body);
+    baitap.ngaycapnhat = new Date();
+    await baitap.save();
     res.json(baitap);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
 router.delete('/:id', async (req, res) => {
   try {
-    const baitap = await BaiTap.findByIdAndDelete(req.params.id);
-    if (!baitap) return res.status(404).json({ error: 'Exercise not found' });
-    res.json({ message: 'Exercise deleted' });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+    const baitap = await Baitap.findById(req.params.id);
+    if (!baitap) return res.status(404).json({ error: 'Baitap not found' });
+    await baitap.remove();
+    res.json({ message: 'Baitap deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
