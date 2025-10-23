@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'; // Nhập 
 import { useLocalSearchParams } from 'expo-router'; // Nhập useLocalSearchParams để lấy params
 import HomeScreen from '../screens/HomeScreen'; // Nhập HomeScreen component
 import WorkoutScreen from '../screens/WorkoutScreen'; // Nhập WorkoutScreen component
+// import WorkoutDetailScreen from '../screens/WorkoutDetailScreen'; // Nhập WorkoutDetailScreen component
+import WorkoutDetailScreenSimple from '../screens/WorkoutDetailScreenSimple';
 import NutritionScreen from '../screens/NutritionScreen'; // Nhập NutritionScreen component  
 import ProgressScreen from '../screens/ProgressScreen'; // Nhập ProgressScreen component
 import ProfileScreen from '../screens/ProfileScreen'; // Nhập ProfileScreen component
@@ -53,11 +55,22 @@ export default function BranchHome() {
     }
   };
 
+  // State để lưu data của workout được chọn
+  const [selectedWorkout, setSelectedWorkout] = useState(null);
+
   // Mock navigation object cho các screen cần navigation prop
   const mockNavigation = {
-    navigate: (screenName: string) => {
-      // Mock navigation - có thể mở rộng sau
-      console.log('Navigate to:', screenName);
+    navigate: (screenName: string, params?: any) => {
+      console.log('Navigate to:', screenName, params);
+      if (screenName === 'WorkoutDetail' && params?.workout) {
+        setSelectedWorkout(params.workout);
+        setCurrentScreen('workoutDetail');
+      }
+    },
+    goBack: () => {
+      console.log('Going back');
+      setCurrentScreen('workout');
+      setSelectedWorkout(null);
     }
   };
 
@@ -113,6 +126,14 @@ export default function BranchHome() {
             setCurrentScreen={setCurrentScreen}
           />
         );
+      case 'workoutDetail':
+        return (
+          <WorkoutDetailScreenSimple 
+            route={{ params: { workout: selectedWorkout } }}
+            navigation={mockNavigation}
+            setCurrentScreen={setCurrentScreen}
+          />
+        );
       case 'editProfile':
         return <EditProfileScreen setCurrentScreen={setCurrentScreen} />; // Render EditProfileScreen với navigation callback
       default:
@@ -128,8 +149,8 @@ export default function BranchHome() {
   return (
     <View style={styles.container}> {/* Container chính */}
       {renderScreen()} {/* Render màn hình hiện tại */}
-      {/* Chỉ hiển thị BottomTabBar khi không ở trang EditProfile */}
-      {currentScreen !== 'editProfile' && (
+      {/* Chỉ hiển thị BottomTabBar khi không ở trang EditProfile hoặc WorkoutDetail */}
+      {currentScreen !== 'editProfile' && currentScreen !== 'workoutDetail' && (
         <BottomTabBar 
           currentScreen={currentScreen} // Truyền màn hình hiện tại
           setCurrentScreen={setCurrentScreen} // Truyền hàm thay đổi màn hình

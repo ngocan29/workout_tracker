@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import { ArrowLeft, MessageCircle, Phone, Video } from 'react-native-feather';
 import { trainerData } from '../app-example/constants/Data';
-import Colors from '../app-example/constants/Colors';
+import { Colors } from '../app-example/constants/Colors';
 
 export default function TrainerScreen({ setCurrentScreen }) {
   return (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,52 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Card, Title, Paragraph, Button } from 'react-native-paper';
 import ProgressCircle from 'react-native-progress/Circle';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Navbar from '../app-example/components/ui/Navbar';
 import { Colors } from '../app-example/constants/Colors';
+import { BranchService } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ isDarkMode, setDarkMode }) {
   const userName = "Tuấn";
+  const [branches, setBranches] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
   const data = [
     { value: 2847, label: "Bước chân" },
     { value: 420, label: "Calo đốt" },
     { value: 7.2, label: "Giờ ngủ" },
   ];
+
+  // Test function to load branches
+  const testLoadBranches = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      console.log('Testing BranchService.getMyBranches()...');
+      const result = await BranchService.getMyBranches();
+      console.log('Branch service result:', result);
+      setBranches(result || []);
+      Alert.alert('Success', `Loaded ${result?.length || 0} branches`);
+    } catch (err) {
+      console.error('Error loading branches:', err);
+      setError(err.message);
+      Alert.alert('Error', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Auto-test on component mount
+    testLoadBranches();
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.background }]}>
@@ -74,6 +104,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode }) {
           </View>
         </View>
 
+        
         {/* Today's Progress */}
         <View style={styles.section}>
           <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
@@ -215,5 +246,34 @@ const styles = StyleSheet.create({
   progressValue: {
     color: 'gray',
     fontSize: 12,
+  },
+  testCard: {
+    padding: 16,
+    borderRadius: 12,
+    elevation: 2,
+    backgroundColor: 'white',
+  },
+  testContent: {
+    gap: 12,
+  },
+  testTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 14,
+  },
+  successText: {
+    color: 'green',
+    fontSize: 14,
+  },
+  branchList: {
+    marginTop: 8,
+  },
+  branchItem: {
+    fontSize: 12,
+    marginVertical: 2,
+    color: '#666',
   },
 });

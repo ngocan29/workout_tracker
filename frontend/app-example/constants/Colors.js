@@ -5,6 +5,9 @@ export const Colors = {
   black: '#000000',
   gray: '#8E8E93',
   background: '#F5F5F5',
+  // Text colors
+  text: '#000000', // Màu text chính
+  textLight: '#6B7280', // Màu text nhạt
   // Dark mode colors - màu sắc cho chế độ tối
   darkGreen: '#10B981', // Xanh lá chủ đạo cho dark mode
   darkBackground: '#1F2937', // Nền đen xám cho dark mode

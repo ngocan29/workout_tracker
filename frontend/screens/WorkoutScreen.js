@@ -21,8 +21,67 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode, navigation }) {
       calories: 250,
       completed: true,
       image: "https://via.placeholder.com/300x200/FF6B6B/white?text=Cardio",
+      description: 'Tập cardio buổi sáng giúp tăng cường trao đổi chất, đốt cháy mỡ thừa và cải thiện sức bền tim mạch.',
+      steps: [
+        'Khởi động 5 phút với các động tác stretching nhẹ nhàng',
+        'Chạy tại chỗ với cường độ vừa phải trong 10 phút',
+        'Thực hiện 50 lần nhảy dây, nghỉ 30 giây',
+        'Thực hiện 10 burpees, nghỉ 30 giây',
+        'Lặp lại 3 vòng',
+      ],
+      benefits: [
+        'Đốt cháy 250-300 calories',
+        'Tăng cường sức bền tim mạch',
+        'Cải thiện trao đổi chất',
+        'Giảm mỡ toàn thân',
+      ],
     },
-    // ... other workouts
+    {
+      id: 2,
+      name: "Tập Tạ Cơ Bản",
+      duration: "45 phút",
+      calories: 180,
+      completed: false,
+      image: "https://via.placeholder.com/300x200/4ECDC4/white?text=Weights",
+      description: 'Bài tập tạ cơ bản giúp xây dựng cơ bắp, tăng cường sức mạnh và cải thiện vóc dáng.',
+      steps: [
+        'Khởi động 10 phút với các bài tập giãn cơ',
+        'Squat với tạ đơn: 3 set x 12 reps',
+        'Bench press: 3 set x 10 reps',
+        'Deadlift: 3 set x 8 reps',
+        'Shoulder press: 3 set x 12 reps',
+        'Nghỉ 60-90 giây giữa các set',
+      ],
+      benefits: [
+        'Xây dựng khối cơ nạc',
+        'Tăng cường sức mạnh',
+        'Cải thiện mật độ xương',
+        'Đốt cháy calo hiệu quả',
+      ],
+    },
+    {
+      id: 3,
+      name: "Yoga Thư Giãn",
+      duration: "20 phút",
+      calories: 80,
+      completed: false,
+      image: "https://via.placeholder.com/300x200/9B59B6/white?text=Yoga",
+      description: 'Yoga thư giãn giúp giảm căng thẳng, cải thiện tính linh hoạt và mang lại sự bình yên.',
+      steps: [
+        'Tư thế núi (Mountain Pose) - 1 phút',
+        'Chào mặt trời (Sun Salutation) - 5 phút',
+        'Tư thế con chó úp mặt - 2 phút',
+        'Tư thế chiến binh - 3 phút mỗi bên',
+        'Tư thế em bé - 2 phút',
+        'Thiền thở - 5 phút',
+      ],
+      benefits: [
+        'Giảm stress và căng thẳng',
+        'Cải thiện tính linh hoạt',
+        'Tăng cường cân bằng',
+        'Cải thiện chất lượng giấc ngủ',
+      ],
+    },
   ];
 
   const categories = [
@@ -80,7 +139,7 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode, navigation }) {
             <TouchableOpacity
               key={workout.id}
               style={styles.workoutCard}
-              onPress={() => navigation.navigate('WorkoutDetail')}
+              onPress={() => navigation.navigate('WorkoutDetailScreen', { workout })}
             >
               <Image source={{ uri: workout.image }} style={styles.workoutImage} />
               <View style={styles.workoutInfo}>

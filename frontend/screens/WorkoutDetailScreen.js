@@ -1,29 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
-import { ArrowLeft } from 'react-native-feather';
-import Colors from '../app-example/constants/Colors';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Colors } from '../app-example/constants/Colors';
 
-export default function WorkoutDetailScreen({ setCurrentScreen }) {
+export default function WorkoutDetailScreen({ route, navigation, setCurrentScreen }) {
   const [workoutTimer, setWorkoutTimer] = useState(1800);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  const workout = {
-    name: 'Cardio Buổi Sáng',
-    image: 'https://...',
-    description: 'Tập cardio buổi sáng giúp tăng cường trao đổi chất, đốt cháy mỡ thừa và cải thiện sức bền tim mạch.',
-    steps: [
-      'Khởi động 5 phút với các động tác stretching nhẹ nhàng',
-      'Chạy tại chỗ với cường độ vừa phải trong 10 phút',
-      'Thực hiện 50 lần nhảy dây, nghỉ 30 giây',
-      'Thực hiện 10 burpees, nghỉ 30 giây',
-      'Lặp lại 3 vòng',
-    ],
-    benefits: [
-      'Đốt cháy 250-300 calories',
-      'Tăng cường sức bền tim mạch',
-      'Cải thiện trao đổi chất',
-      'Giảm mỡ toàn thân',
-    ],
+  // Lấy dữ liệu workout từ navigation params
+  const workout = route?.params?.workout || {
+    name: 'Bài Tập Mặc Định',
+    image: 'https://via.placeholder.com/300x200/FF6B6B/white?text=Workout',
+    description: 'Mô tả bài tập mặc định.',
+    steps: ['Bước 1: Khởi động', 'Bước 2: Tập luyện', 'Bước 3: Thư giãn'],
+    benefits: ['Cải thiện sức khỏe', 'Tăng cường thể lực'],
+    duration: '30 phút',
+    calories: 200,
   };
 
   useEffect(() => {
@@ -45,8 +37,8 @@ export default function WorkoutDetailScreen({ setCurrentScreen }) {
   return (
     <View style={[styles.container, { backgroundColor: Colors.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => setCurrentScreen('main')}>
-          <ArrowLeft stroke={Colors.text} width={24} height={24} />
+        <TouchableOpacity onPress={() => navigation ? navigation.goBack() : setCurrentScreen && setCurrentScreen('main')}>
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{workout.name}</Text>
         <View style={{ width: 24 }} />
@@ -54,6 +46,16 @@ export default function WorkoutDetailScreen({ setCurrentScreen }) {
       <View style={styles.imageCard}>
         <Image source={{ uri: workout.image }} style={styles.workoutImage} />
         <Text style={styles.description}>{workout.description}</Text>
+        <View style={styles.workoutStats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Thời gian:</Text>
+            <Text style={styles.statValue}>{workout.duration}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Calories:</Text>
+            <Text style={styles.statValue}>{workout.calories} calo</Text>
+          </View>
+        </View>
       </View>
       <View style={styles.timerCard}>
         <Text style={styles.timerText}>
@@ -100,7 +102,10 @@ export default function WorkoutDetailScreen({ setCurrentScreen }) {
           </View>
         )}
       />
-      <TouchableOpacity style={styles.completeButton} onPress={() => setCurrentScreen('main')}>
+      <TouchableOpacity 
+        style={styles.completeButton} 
+        onPress={() => navigation ? navigation.goBack() : setCurrentScreen && setCurrentScreen('main')}
+      >
         <Text style={styles.completeButtonText}>Hoàn Thành</Text>
       </TouchableOpacity>
     </View>
@@ -138,6 +143,26 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     color: Colors.textLight,
+    marginBottom: 12,
+  },
+  workoutStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: Colors.textLight,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
   },
   timerCard: {
     backgroundColor: Colors.white,
