@@ -1,19 +1,19 @@
 const mongoose = require('mongoose');
 
-const bophanSchema = new mongoose.Schema({
-  ten: { type: String, required: true },
-  sodo: { type: Number, required: true },
-  sodothangtruoc: { type: Number }
+const sodocotheSchema = new mongoose.Schema({
+  khachhangUserID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  bophan: [{
+    ten: { type: String, required: true },
+    sodo: { type: Number, required: true },
+    sodothangtruoc: { type: Number }
+  }],
+  ngaytao: { type: Date, required: true }
 });
 
-const sodocotheSchema = new mongoose.Schema({
-  khachhangID: { type: mongoose.Schema.Types.ObjectId },
-  userID: { type: mongoose.Schema.Types.ObjectId },
-  bophan: { type: [bophanSchema], required: true },
-  ngaytao: { type: Date, required: true }
-}, { collection: 'sodocothe' });
-
-sodocotheSchema.index({ khachhangID: 1 });
+sodocotheSchema.index({ khachhangUserID: 1 });
 sodocotheSchema.index({ ngaytao: 1 });
+sodocotheSchema.index({ userID: 1 });
+sodocotheSchema.index({ khachhangUserID: 1, ngaytao: -1 });
 
-module.exports = mongoose.model('SoDoCoThe', sodocotheSchema);
+module.exports = mongoose.model('Sodocothe', sodocotheSchema);

@@ -4,8 +4,6 @@ const connectDB = require('./db');
 const userRoutes = require('./routes/users');
 const chinhanhRoutes = require('./routes/chinhanh');
 const authRoutes = require('./routes/auth');
-const nhanvienRoutes = require('./routes/nhanvien');
-const khachhangRoutes = require('./routes/khachhang');
 const baitapRoutes = require('./routes/baitap');
 const muctieuRoutes = require('./routes/muctieu');
 const dinhduongRoutes = require('./routes/dinhduong');
@@ -42,8 +40,6 @@ app.get('/', (req, res) => {
       '/auth/register', 
       '/users',
       '/chinhanh',
-      '/nhanvien',
-      '/khachhang',
       '/baitap',
       '/muctieu',
       '/dinhduong',
@@ -53,12 +49,10 @@ app.get('/', (req, res) => {
   });
 });
 
-// Mount routes (không có prefix /api)
+// Mount routes 
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/chinhanh', chinhanhRoutes);
-app.use('/nhanvien', nhanvienRoutes);
-app.use('/khachhang', khachhangRoutes);
 app.use('/baitap', baitapRoutes);
 app.use('/muctieu', muctieuRoutes);
 app.use('/dinhduong', dinhduongRoutes);
@@ -71,12 +65,12 @@ const HOST = '0.0.0.0'; // Listen on all network interfaces
 app.listen(PORT, HOST, () => {
   console.log(`🚀 Workout Tracker Server running on http://${HOST}:${PORT}`);
   console.log(`📱 Local access: http://localhost:${PORT}`);
-  console.log(`🌐 Network access: http://192.168.1.19:${PORT}`);
+  console.log(`🌐 Network access: http://192.168.1.6:${PORT}`);
   console.log(`✅ Available endpoints:`);
-  console.log(`  - http://192.168.1.19:${PORT}/users`);
-  console.log(`  - http://192.168.1.19:${PORT}/auth/login`);
-  console.log(`  - http://192.168.1.19:${PORT}/chinhanh`);
-  console.log(`  - http://192.168.1.19:${PORT}/khachhang`);
-  console.log(`  - http://192.168.1.19:${PORT}/nhanvien`);
+  console.log(`  - http://192.168.1.6:${PORT}/users`);
+  console.log(`  - http://192.168.1.6:${PORT}/auth/login`);
+  console.log(`  - http://192.168.1.6:${PORT}/chinhanh`);
+  console.log(`  - http://192.168.1.6:${PORT}/khachhang`);
+  console.log(`  - http://192.168.1.6:${PORT}/nhanvien`);
   console.log(`\n🔥 Ready for production use!`);
 });

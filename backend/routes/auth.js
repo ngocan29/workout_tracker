@@ -7,7 +7,7 @@ const bcrypt = require('bcrypt');
 router.post('/register', async (req, res) => {
   try {
     console.log('📝 Register request received:', req.body);
-    const { ten, loai_tai_khoan, email, sodienthoai, diachi, nguoidaidien, matkhau, ngayvao, chuoi } = req.body;
+    const { ten, loai_tai_khoan, email, sodienthoai, diachi, nguoidaidien, matkhau, ngayvao, chuoi, gioitinh } = req.body;
     
     // Validation số điện thoại
     if (sodienthoai && !/^[0-9]{10,11}$/.test(sodienthoai)) {
@@ -19,6 +19,11 @@ router.post('/register', async (req, res) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: 'Email already exists' });
+    }
+    
+    // Kiểm tra giới tính
+    if (!['male', 'female'].includes(gioitinh)) {
+      return res.status(400).json({ error: 'Giới tính phải là male hoặc female' });
     }
     
     // Hash mật khẩu
@@ -34,6 +39,7 @@ router.post('/register', async (req, res) => {
       matkhau: hashedPassword,
       ngayvao: ngayvao || new Date(),
       chuoi: chuoi || 0,
+      gioitinh,
       trangthai: 'active'
     });
     
@@ -58,6 +64,7 @@ router.post('/register', async (req, res) => {
 // Đăng nhập
 router.post('/login', async (req, res) => {
   try {
+    console.log('🔐 Login request received:', req.body);
     const { email, matkhau } = req.body;
     
     // Tìm user theo email
@@ -93,7 +100,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Đăng xuất (đơn giản, sau này có thể thêm token blacklist)
+// Đăng xuất
 router.post('/logout', (req, res) => {
   res.json({ message: 'Logout successful' });
 });
@@ -133,6 +140,11 @@ router.put('/profile', async (req, res) => {
     // Nếu có mật khẩu mới, hash nó
     if (matkhau) {
       updateData.matkhau = await bcrypt.hash(matkhau, 10);
+    }
+    
+    // Kiểm tra giới tính nếu được cập nhật
+    if (updateData.gioitinh && !['male', 'female'].includes(updateData.gioitinh)) {
+      return res.status(400).json({ error: 'Giới tính phải là male hoặc female' });
     }
     
     const user = await User.findByIdAndUpdate(

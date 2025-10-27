@@ -20,12 +20,12 @@ try {
     Write-Host ""
     Write-Host "Your server will be accessible at:" -ForegroundColor Cyan
     Write-Host "- Local: http://localhost:5000" -ForegroundColor Yellow
-    Write-Host "- Network: http://192.168.1.19:5000" -ForegroundColor Yellow
+    Write-Host "- Network: http://192.168.1.6:5000" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "To test from another device:" -ForegroundColor Cyan
     Write-Host "1. Make sure both devices are on the same network"
     Write-Host "2. Start the server: npm start"
-    Write-Host "3. Access: http://192.168.1.19:5000"
+    Write-Host "3. Access: http://192.168.1.6:5000"
     Write-Host ""
     
 } catch {
