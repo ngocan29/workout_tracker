@@ -20,7 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors } from '../constants/Colors';
-import AddKhachHang from './AddKhachHang';
+import CustomerFormModal from '../components/CustomerFormModal';
 
 export default function AddEditLichHen({ 
   visible, 
@@ -721,8 +721,9 @@ export default function AddEditLichHen({
         <CustomerSelectionModal />
 
         {/* Add Customer Modal */}
-        <AddKhachHang
+        <CustomerFormModal
           visible={showAddCustomerModal}
+          customer={null}
           isDarkMode={isDarkMode}
           onClose={() => setShowAddCustomerModal(false)}
           onSave={handleSaveNewCustomer}
