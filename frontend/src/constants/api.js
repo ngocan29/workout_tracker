@@ -18,6 +18,7 @@ export const API_CONFIG = {
     WORKOUT_CREATE: '/baitap',
     WORKOUT_UPDATE: '/baitap',
     WORKOUT_DELETE: '/baitap',
+    WORKOUT_DETAIL: '/baitap',
     
     // User endpoints
     USERS: '/users',
@@ -42,3 +43,6 @@ export const API_STATUS = {
   NOT_FOUND: 404,
   SERVER_ERROR: 500
 };
+
+// Export BASE_URL cho backward compatibility
+export const API_BASE_URL = 'http://localhost:5000';

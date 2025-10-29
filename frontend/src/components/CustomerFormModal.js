@@ -13,10 +13,15 @@ import {
   TextInput, 
   Card, 
   SegmentedButtons,
-  Button
+  Button,
+  Menu,
+  Divider
 } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
+import { getEmployeesByBranch } from '../services/employeeApi';
+import { createCustomer, updateCustomer } from '../services/customerApi';
 
 export default function CustomerFormModal({ 
   visible, 
@@ -31,6 +36,7 @@ export default function CustomerFormModal({
     phone: '',
     address: '',
     gender: 'male',
+    password: '', // Thêm field mật khẩu
     dateOfBirth: '',
     height: '',
     weight: '',
@@ -38,13 +44,18 @@ export default function CustomerFormModal({
     emergencyPhone: '',
     medicalNotes: '',
     fitnessGoal: '',
-    bodyMeasurements: []
+    bodyMeasurements: [],
+    assignedEmployeeId: '' // Thêm field để lưu ID nhân viên được chọn
   });
 
   const [errors, setErrors] = useState({});
   const [showBodyMeasurementModal, setShowBodyMeasurementModal] = useState(false);
   const [hasNutritionData, setHasNutritionData] = useState(false);
   const [hasBodyMeasurements, setHasBodyMeasurements] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [userData, setUserData] = useState(null);
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const genderOptions = [
     { value: 'male', label: 'Nam' },
@@ -62,28 +73,79 @@ export default function CustomerFormModal({
     'Thi đấu thể thao'
   ];
 
+  // Load user data từ AsyncStorage
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  // Load employees khi có userData và user là business
+  useEffect(() => {
+    // vai_tro = undefined có nghĩa là Business User
+    const isBusiness = userData?.additional_info?.vai_tro === undefined || 
+                       userData?.additional_info?.vai_tro == null ||
+                       userData?.additional_info?.isBusiness;
+    
+    if (isBusiness && userData?.additional_info?.chinhanhID) {
+      const loadEmployees = async () => {
+        try {
+          const chinhanhID = userData?.additional_info?.chinhanhID;
+          if (!chinhanhID) return;
+
+          const result = await getEmployeesByBranch(chinhanhID);
+          if (result.success) {
+            setEmployees(result.data);
+          } else {
+            console.error('Error loading employees:', result.error);
+          }
+        } catch (error) {
+          console.error('Error in loadEmployees:', error);
+        }
+      };
+      
+      loadEmployees();
+    }
+  }, [userData]);
+
+  const loadUserData = async () => {
+    try {
+      const userDataString = await AsyncStorage.getItem('userData');
+      if (userDataString) {
+        const parsedUserData = JSON.parse(userDataString);
+        setUserData(parsedUserData);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
   // Load customer data when editing
   useEffect(() => {
     if (customer) {
+      console.log('Loading customer data for editing:', customer);
+      
+      // Map dữ liệu từ customer object với nhiều format khác nhau
       setForm({
-        fullName: customer.fullName || '',
+        fullName: customer.fullName || customer.ten || '',
         email: customer.email || '',
-        phone: customer.phone || '',
-        address: customer.address || '',
-        gender: customer.gender || 'male',
-        dateOfBirth: customer.dateOfBirth || '',
-        height: customer.height || '',
-        weight: customer.weight || '',
-        emergencyContact: customer.emergencyContact || '',
-        emergencyPhone: customer.emergencyPhone || '',
-        medicalNotes: customer.medicalNotes || '',
-        fitnessGoal: customer.fitnessGoal || '',
-        bodyMeasurements: customer.bodyMeasurements || []
+        phone: customer.phone || customer.sodienthoai || '',
+        address: customer.address || customer.diachi || '',
+        gender: customer.gender || customer.gioitinh || 'male',
+        password: '', // Không hiển thị password cũ khi edit
+        dateOfBirth: customer.dateOfBirth || customer.ngaysinh || '',
+        height: customer.height || customer.chieucao || '',
+        weight: customer.weight || customer.cannang || '',
+        emergencyContact: customer.emergencyContact || customer.lienhe_khan_cap || '',
+        emergencyPhone: customer.emergencyPhone || customer.sdt_khan_cap || '',
+        medicalNotes: customer.medicalNotes || customer.ghi_chu_y_te || '',
+        fitnessGoal: customer.fitnessGoal || customer.muc_tieu_tap_luyen || '',
+        bodyMeasurements: customer.bodyMeasurements || [],
+        assignedEmployeeId: customer.assignedEmployeeId || customer.additional_info?.nhanvienUserID || ''
       });
       
-      setHasNutritionData(!!customer.height || !!customer.weight);
+      setHasNutritionData(!!customer.height || !!customer.weight || !!customer.chieucao || !!customer.cannang);
       setHasBodyMeasurements(customer.bodyMeasurements && customer.bodyMeasurements.length > 0);
     } else {
+      console.log('Creating new customer form');
       // Reset form for new customer
       setForm({
         fullName: '',
@@ -91,6 +153,7 @@ export default function CustomerFormModal({
         phone: '',
         address: '',
         gender: 'male',
+        password: '', // Reset password field
         dateOfBirth: '',
         height: '',
         weight: '',
@@ -98,7 +161,8 @@ export default function CustomerFormModal({
         emergencyPhone: '',
         medicalNotes: '',
         fitnessGoal: '',
-        bodyMeasurements: []
+        bodyMeasurements: [],
+        assignedEmployeeId: ''
       });
       setHasNutritionData(false);
       setHasBodyMeasurements(false);
@@ -130,6 +194,13 @@ export default function CustomerFormModal({
       newErrors.address = 'Vui lòng nhập địa chỉ';
     }
 
+    // Validate password - required for new customer
+    if (!customer && !form.password.trim()) {
+      newErrors.password = 'Vui lòng nhập mật khẩu cho khách hàng mới';
+    } else if (form.password && form.password.length < 6) {
+      newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
+    }
+
     // Validate numeric fields
     if (form.height && (isNaN(form.height) || form.height <= 0)) {
       newErrors.height = 'Chiều cao phải là số dương';
@@ -143,22 +214,91 @@ export default function CustomerFormModal({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) {
       Alert.alert('Lỗi', 'Vui lòng kiểm tra lại thông tin đã nhập');
       return;
     }
 
-    const customerData = {
-      ...form,
-      id: customer ? customer.id : Date.now(), // Keep existing ID or create new one
-      avatar: customer ? customer.avatar : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjUiIGN5PSIyNSIgcj0iMjUiIGZpbGw9IiNkZGRkZGQiLz4KPGNpcmNsZSBjeD0iMjUiIGN5PSIyMCIgcj0iOCIgZmlsbD0iIzk5OTk5OSIvPgo8cGF0aCBkPSJNNDAgNDBDNDAgMzMuMzcyNiAzMy42Mjc0IDI4IDI1IDI4QzE2LjM3MjYgMjggMTAgMzMuMzcyNiAxMCA0MEg0MFoiIGZpbGw9IiM5OTk5OTkiLz4KPC9zdmc+',
-      joinDate: customer ? customer.joinDate : new Date().toLocaleDateString('vi-VN'),
-      assignedTo: customer ? customer.assignedTo : 'current_user' // Nhân viên hiện tại
-    };
+    setLoading(true);
+    
+    try {
+      // Debug logging
+      console.log('handleSave - customer:', customer);
+      console.log('handleSave - customer._id:', customer?._id);
+      console.log('handleSave - customer.id:', customer?.id);
+      console.log('handleSave - customer.loai_tai_khoan:', customer?.loai_tai_khoan);
+      
+      // Chỉ gửi thông tin cơ bản để tạo/cập nhật
+      const basicCustomerData = {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+        gender: form.gender,
+        assignedEmployeeId: form.assignedEmployeeId,
+        chinhanhID: userData?.additional_info?.chinhanhID || userData?.chinhanhID
+      };
 
-    onSave(customerData);
-    onClose();
+      // Đối với cập nhật khách hàng, cần thêm loai_tai_khoan để tránh validation error
+      if (customer) {
+        basicCustomerData.loai_tai_khoan = customer.loai_tai_khoan || 'personal';
+      }
+
+      // Chỉ thêm password khi tạo mới hoặc khi có thay đổi password
+      if (!customer) {
+        // Tạo mới - password là bắt buộc
+        if (!form.password.trim()) {
+          Alert.alert('Lỗi', 'Vui lòng nhập mật khẩu cho khách hàng mới');
+          setLoading(false);
+          return;
+        }
+        basicCustomerData.password = form.password;
+      } else if (form.password && form.password.trim()) {
+        // Cập nhật - chỉ thêm password nếu có nhập mật khẩu mới
+        basicCustomerData.password = form.password;
+      }
+
+      let result;
+      // Kiểm tra customer ID với nhiều format khác nhau
+      const customerId = customer?._id || customer?.id;
+      
+      if (customer && customerId) {
+        // Cập nhật khách hàng hiện có
+        console.log('Updating customer with ID:', customerId);
+        result = await updateCustomer(customerId, basicCustomerData);
+      } else {
+        // Tạo khách hàng mới
+        console.log('Creating new customer');
+        result = await createCustomer(basicCustomerData);
+      }
+
+      if (result.success) {
+        Alert.alert(
+          'Thành công', 
+          result.message || (customer ? 'Cập nhật khách hàng thành công!' : 'Thêm khách hàng thành công!'),
+          [{
+            text: 'OK',
+            onPress: () => {
+              onSave(result.customer); // Trả về data từ API
+              onClose();
+            }
+          }]
+        );
+      } else {
+        throw new Error(result.error || 'Có lỗi xảy ra');
+      }
+      
+    } catch (error) {
+      console.error('Error saving customer:', error);
+      Alert.alert(
+        'Lỗi',
+        error.message || 'Có lỗi xảy ra khi lưu thông tin khách hàng',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdateNutrition = () => {
@@ -193,8 +333,12 @@ export default function CustomerFormModal({
           }]}>
             {customer ? 'Sửa Khách Hàng' : 'Thêm Khách Hàng'}
           </Text>
-          <TouchableOpacity onPress={handleSave}>
-            <Text style={[styles.saveButton, { color: Colors.darkGreen }]}>Lưu</Text>
+          <TouchableOpacity onPress={handleSave} disabled={loading}>
+            <Text style={[styles.saveButton, { 
+              color: loading ? Colors.gray : Colors.darkGreen 
+            }]}>
+              {loading ? 'Đang lưu...' : 'Lưu'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -274,6 +418,23 @@ export default function CustomerFormModal({
                 <Text style={styles.errorText}>{errors.address}</Text>
               )}
 
+              <TextInput
+                style={[styles.input, { 
+                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                  color: isDarkMode ? Colors.darkText : Colors.black,
+                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                }]}
+                placeholder={customer ? "Mật khẩu mới (để trống nếu không đổi)" : "Mật khẩu *"}
+                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                value={form.password}
+                onChangeText={(text) => setForm(prev => ({ ...prev, password: text }))}
+                secureTextEntry={true}
+                autoCapitalize="none"
+              />
+              {errors.password && (
+                <Text style={styles.errorText}>{errors.password}</Text>
+              )}
+
               <Text style={[styles.pickerLabel, { 
                 color: isDarkMode ? Colors.darkText : Colors.black 
               }]}>
@@ -292,6 +453,101 @@ export default function CustomerFormModal({
                 }}
               />
 
+              {/* vai_tro = undefined có nghĩa là Business User */}
+              {(userData?.additional_info?.vai_tro === undefined || 
+                userData?.additional_info?.vai_tro == null ||
+                userData?.additional_info?.isBusiness) && (
+                <>
+                  <Text style={[styles.pickerLabel, { 
+                    color: isDarkMode ? Colors.darkText : Colors.black 
+                  }]}>
+                    Nhân viên phụ trách
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.employeeSelector, {
+                      backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                      borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                    }]}
+                    onPress={() => setShowEmployeeDropdown(!showEmployeeDropdown)}
+                  >
+                    <Text style={[styles.employeeSelectorText, {
+                      color: form.assignedEmployeeId ? 
+                        (isDarkMode ? Colors.darkText : Colors.black) : 
+                        (isDarkMode ? Colors.darkSecondary : Colors.gray)
+                    }]}>
+                      {form.assignedEmployeeId ? 
+                        employees.find(emp => emp._id === form.assignedEmployeeId)?.ten || 'Chọn nhân viên' :
+                        'Chọn nhân viên phụ trách'
+                      }
+                    </Text>
+                    <Ionicons 
+                      name={showEmployeeDropdown ? "chevron-up" : "chevron-down"} 
+                      size={20} 
+                      color={isDarkMode ? Colors.darkSecondary : Colors.gray} 
+                    />
+                  </TouchableOpacity>
+
+                  {/* Dropdown danh sách nhân viên */}
+                  {showEmployeeDropdown && (
+                    <View style={[styles.employeeDropdown, {
+                      backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
+                      borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                    }]}>
+                      <TouchableOpacity
+                        style={[styles.employeeOption, {
+                          borderBottomColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                        }]}
+                        onPress={() => {
+                          setForm(prev => ({ ...prev, assignedEmployeeId: '' }));
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        <Text style={[styles.employeeOptionText, {
+                          color: isDarkMode ? Colors.darkSecondary : Colors.gray
+                        }]}>
+                          Không chỉ định
+                        </Text>
+                      </TouchableOpacity>
+                      {employees.map((employee) => (
+                        <TouchableOpacity
+                          key={employee._id}
+                          style={[styles.employeeOption, {
+                            borderBottomColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb',
+                            backgroundColor: form.assignedEmployeeId === employee._id ? 
+                              (Colors.darkGreen + '20') : 'transparent'
+                          }]}
+                          onPress={() => {
+                            setForm(prev => ({ ...prev, assignedEmployeeId: employee._id }));
+                            setShowEmployeeDropdown(false);
+                          }}
+                        >
+                          <View style={styles.employeeOptionContent}>
+                            <Text style={[styles.employeeOptionText, {
+                              color: isDarkMode ? Colors.darkText : Colors.black,
+                              fontWeight: form.assignedEmployeeId === employee._id ? '600' : '400'
+                            }]}>
+                              {employee.ten}
+                            </Text>
+                            <Text style={[styles.employeeOptionSubtext, {
+                              color: isDarkMode ? Colors.darkSecondary : Colors.gray
+                            }]}>
+                              {employee.additional_info?.chucvu || 'Nhân viên'} • {employee.email}
+                            </Text>
+                          </View>
+                          {form.assignedEmployeeId === employee._id && (
+                            <Ionicons 
+                              name="checkmark" 
+                              size={16} 
+                              color={Colors.darkGreen} 
+                            />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
+
               
             </Card.Content>
           </Card>
@@ -306,21 +562,15 @@ export default function CustomerFormModal({
                 <Text style={[styles.sectionTitle, { 
                   color: isDarkMode ? Colors.darkText : Colors.black 
                 }]}>Thông Tin Thể Chất</Text>
-                <Button
-                  mode={hasNutritionData ? "outlined" : "contained"}
-                  onPress={handleUpdateNutrition}
-                  style={styles.sectionButton}
-                  labelStyle={{ fontSize: 12 }}
-                >
-                  {hasNutritionData ? "Cập nhật" : "Thêm"}
-                </Button>
+                {/* Button luôn bị ẩn - chỉ đọc cho tất cả trường hợp */}
               </View>
 
               <View style={styles.inputRow}>
                 <TextInput
                   style={[styles.halfInput, { 
-                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                    color: isDarkMode ? Colors.darkText : Colors.black,
+                    // Luôn read-only cho tất cả trường hợp
+                    backgroundColor: isDarkMode ? Colors.darkSecondary + '30' : '#f5f5f5',
+                    color: isDarkMode ? Colors.darkSecondary : Colors.gray,
                     borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
                   }]}
                   placeholder="Chiều cao (cm)"
@@ -328,12 +578,14 @@ export default function CustomerFormModal({
                   value={form.height}
                   onChangeText={(text) => setForm(prev => ({ ...prev, height: text }))}
                   keyboardType="numeric"
+                  editable={false}
                 />
 
                 <TextInput
                   style={[styles.halfInput, { 
-                    backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                    color: isDarkMode ? Colors.darkText : Colors.black,
+                    // Luôn read-only cho tất cả trường hợp
+                    backgroundColor: isDarkMode ? Colors.darkSecondary + '30' : '#f5f5f5',
+                    color: isDarkMode ? Colors.darkSecondary : Colors.gray,
                     borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
                   }]}
                   placeholder="Cân nặng (kg)"
@@ -341,8 +593,16 @@ export default function CustomerFormModal({
                   value={form.weight}
                   onChangeText={(text) => setForm(prev => ({ ...prev, weight: text }))}
                   keyboardType="numeric"
+                  editable={false}
                 />
               </View>
+
+              {/* Luôn hiển thị thông báo read-only */}
+              <Text style={[styles.readOnlyNotice, {
+                color: isDarkMode ? Colors.darkSecondary : Colors.gray
+              }]}>
+                ℹ️ Thông tin thể chất chỉ được xem, không thể chỉnh sửa
+              </Text>
 
               {(errors.height || errors.weight) && (
                 <Text style={styles.errorText}>
@@ -362,14 +622,7 @@ export default function CustomerFormModal({
                 <Text style={[styles.sectionTitle, { 
                   color: isDarkMode ? Colors.darkText : Colors.black 
                 }]}>Số Đo Cơ Thể</Text>
-                <Button
-                  mode={hasBodyMeasurements ? "outlined" : "contained"}
-                  onPress={() => setShowBodyMeasurementModal(true)}
-                  style={styles.sectionButton}
-                  labelStyle={{ fontSize: 12 }}
-                >
-                  {hasBodyMeasurements ? "Cập nhật" : "Thêm"}
-                </Button>
+                {/* Button luôn bị ẩn - chỉ đọc cho tất cả trường hợp */}
               </View>
 
               {hasBodyMeasurements && (
@@ -389,21 +642,19 @@ export default function CustomerFormModal({
                   ))}
                 </View>
               )}
+
+              {/* Luôn hiển thị thông báo read-only */}
+              <Text style={[styles.readOnlyNotice, {
+                color: isDarkMode ? Colors.darkSecondary : Colors.gray
+              }]}>
+                ℹ️ Số đo cơ thể chỉ được xem, không thể chỉnh sửa
+              </Text>
             </Card.Content>
           </Card>
 
         </ScrollView>
 
-        {/* Body Measurement Modal */}
-        {showBodyMeasurementModal && (
-          <BodyMeasurementModal
-            visible={showBodyMeasurementModal}
-            measurements={form.bodyMeasurements}
-            isDarkMode={isDarkMode}
-            onClose={() => setShowBodyMeasurementModal(false)}
-            onSave={handleBodyMeasurementSave}
-          />
-        )}
+        {/* Body Measurement Modal đã bị vô hiệu hóa - read-only cho tất cả */}
       </SafeAreaView>
     </Modal>
   );
@@ -607,6 +858,57 @@ const styles = StyleSheet.create({
   },
   segmentedButtons: {
     marginBottom: 12,
+  },
+  employeeSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  employeeSelectorText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  employeeDropdown: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 12,
+    maxHeight: 200,
+  },
+  employeeOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+  },
+  employeeOptionContent: {
+    flex: 1,
+  },
+  employeeOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  employeeOptionSubtext: {
+    fontSize: 12,
+  },
+  readOnlyNotice: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  debugText: {
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginBottom: 8,
+    padding: 4,
+    backgroundColor: '#ffeb3b20',
+    borderRadius: 4,
   },
   goalsContainer: {
     marginBottom: 12,

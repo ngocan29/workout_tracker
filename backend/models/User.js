@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   chuoi: { type: Number, min: 0, required: false },
   diemthuong: { type: Number, min: 0, default: 0 },
   buocchan: { type: Number, min: 0, default: 0 },
-  matkhau: { type: String, required: true },
+  matkhau: { type: String, required: false },
   gioitinh: { type: String, enum: ['male','female'], required: false },
   trangthai: { type: String, enum: ['active', 'inactive', 'blocked'], default: 'active' },
   additional_info: {
@@ -20,6 +20,7 @@ const userSchema = new mongoose.Schema({
     mota: { type: String },
     ngaybatdau: { type: Date },
     ngayketthuc: { type: Date },
+    luong: { type: Number, min: 0 }, // Chỉ dành cho nhân viên
     chinhanhID: { type: mongoose.Schema.Types.ObjectId, ref: 'Chinhanh' },
     nhanvienUserID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     ngaydangky: { type: Date },

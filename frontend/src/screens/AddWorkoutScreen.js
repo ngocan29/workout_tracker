@@ -1,13 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import {View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Platform} from 'react-native';
 import { ArrowLeft, Plus, Trash2 } from 'react-native-feather';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -112,13 +104,37 @@ export default function AddWorkoutScreen() {
     }));
   };
 
+  // chinh sua thong bao alert
+  const showAlert = (title, message, onPressOK) => {
+    if (Platform.OS === 'web') {
+      // Hiển thị alert web
+      window.alert(`${title}\n${message}`);
+      // Chỉ gọi callback nếu thực sự là một hàm
+      if (typeof onPressOK === 'function') {
+        onPressOK();
+      }
+    } else {
+      // Native Alert (iOS/Android)
+      Alert.alert(title, message, [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (typeof onPressOK === 'function') {
+              onPressOK();
+            }
+          },
+        },
+      ]);
+    }
+  };
+
   const handleSave = async () => {
     try {
       setLoading(true);
 
       // Validation
       if (!formData.ten.trim()) {
-        Alert.alert('Lỗi', 'Vui lòng nhập tên bài tập');
+        showAlert('Lỗi', 'Vui lòng nhập tên bài tập');
         return;
       }
 
@@ -127,7 +143,7 @@ export default function AddWorkoutScreen() {
       const user = userData ? JSON.parse(userData) : null;
 
       if (!user) {
-        Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
+        showAlert('Lỗi', 'Không tìm thấy thông tin người dùng');
         return;
       }
 
@@ -182,20 +198,16 @@ export default function AddWorkoutScreen() {
         console.log('Workout created successfully:', response);
       }
 
-      Alert.alert(
+      showAlert(    // su dung showalert vi alert chi hien thi mobile
         'Thành công',
         isEditMode ? 'Bài tập đã được cập nhật thành công!' : 'Bài tập đã được tạo thành công!',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back()
-          }
-        ]
+        () => { router.back();
+        }
       );
 
     } catch (error) {
       console.error('Error saving workout:', error);
-      Alert.alert('Lỗi', 'Có lỗi xảy ra khi lưu bài tập');
+      showAlert('Lỗi', 'Có lỗi xảy ra khi lưu bài tập');
     } finally {
       setLoading(false);
     }

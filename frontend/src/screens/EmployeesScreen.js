@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   Modal,
   StyleSheet,
   Dimensions,
-  Alert,
+  Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { Card, Button, FAB, Avatar, Searchbar, DataTable, Chip } from 'react-native-paper';
+import { Card, FAB, Avatar, Searchbar, DataTable, Chip } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
+import { getEmployeesByBranch, createEmployee, updateEmployee, deleteEmployee } from '../services/employeeApi';
 
 const { width } = Dimensions.get('window');
 const isTablet = width > 768;
@@ -25,50 +27,92 @@ export default function EmployeesScreen({ isDarkMode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // Load user data từ AsyncStorage
   useEffect(() => {
-    // Sample data - replace with API calls
-    const sampleEmployees = [
-      {
-        id: '1',
-        fullName: 'Phạm Thành Đạt',
-        email: 'phamthanhdat@gmail.com',
-        phone: '0903456789',
-        address: '789 Lê Văn Sỹ, Q3, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Pham+Thanh+Dat&background=random',
-        joinDate: '2023-12-01',
-        salary: '15000000',
-        status: 'active'
-      },
-      {
-        id: '2', 
-        fullName: 'Lê Thị Mai',
-        email: 'lethimai@gmail.com',
-        phone: '0908765432',
-        address: '321 Pasteur, Q1, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Le+Thi+Mai&background=random',
-        joinDate: '2024-01-10',
-        salary: '12000000',
-        status: 'active'
-      },
-    ];
-    
-    // TODO: Replace with actual API call
-    setEmployees(sampleEmployees);
+    loadUserData();
   }, []);
 
-  useEffect(() => {
-    if (!searchQuery) {
-      setFilteredEmployees(employees);
-      return;
+  const loadUserData = async () => {
+    try {
+      const userDataStr = await AsyncStorage.getItem('userData');
+      if (userDataStr) {
+        const user = JSON.parse(userDataStr);
+        setUserData(user);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
     }
+  };
 
-    const filtered = employees.filter(employee => 
-      employee.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.phone.includes(searchQuery) 
-    );
-    setFilteredEmployees(filtered);
+  // Load employees khi có userData
+  const loadEmployees = useCallback(async () => {
+    try {
+      setLoading(true);
+      const chinhanhID = userData?.additional_info?.chinhanhID;
+      
+      if (!chinhanhID) {
+        console.error('No branch ID found');
+        setLoading(false);
+        return;
+      }
+
+      const result = await getEmployeesByBranch(chinhanhID);
+      
+      if (result.success) {
+        // Transform data để match với UI expectations
+        const transformedEmployees = result.data.map(emp => ({
+          id: emp._id,
+          fullName: emp.ten || emp.fullName,
+          email: emp.email,
+          phone: emp.sodienthoai || emp.phone,
+          address: emp.diachi || emp.address,
+          position: emp.additional_info?.position || emp.position || 'Nhân viên',
+          salary: emp.additional_info?.luong || emp.additional_info?.salary || emp.salary || 0,
+          gender: emp.gioitinh || emp.gender || 'male',
+          joinDate: emp.ngayvao ? new Date(emp.ngayvao).toLocaleDateString('vi-VN') : 'N/A',
+          avatar: emp.avatar || 'https://via.placeholder.com/150',
+          height: emp.chieucao || emp.height || '',
+          weight: emp.cannang || emp.weight || '',
+          bodyMeasurements: emp.bodyMeasurements || []
+        }));
+        
+        setEmployees(transformedEmployees);
+        setFilteredEmployees(transformedEmployees);
+      } else {
+        console.error('Failed to load employees:', result.error);
+        setEmployees([]);
+        setFilteredEmployees([]);
+      }
+    } catch (error) {
+      console.error('Error loading employees:', error);
+      setEmployees([]);
+      setFilteredEmployees([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [userData?.additional_info?.chinhanhID]);
+
+  useEffect(() => {
+    if (userData) {
+      loadEmployees();
+    }
+  }, [userData, loadEmployees]);
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredEmployees(employees);
+    } else {
+      const filtered = employees.filter(employee =>
+        employee.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.phone.includes(searchQuery) ||
+        employee.position.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredEmployees(filtered);
+    }
   }, [searchQuery, employees]);
 
   const handleAddEmployee = () => {
@@ -81,28 +125,44 @@ export default function EmployeesScreen({ isDarkMode }) {
     setShowAddModal(true);
   };
 
-  const handleDeleteEmployee = (employeeId) => {
-    Alert.alert(
-      'Xác nhận xóa',
-      'Bạn có chắc chắn muốn xóa nhân viên này?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Xóa', 
-          style: 'destructive',
-          onPress: () => {
-            setEmployees(prev => prev.filter(e => e.id !== employeeId));
+  const handleDeleteEmployee = async (employeeId) => {
+    // Use browser native dialog for web compatibility
+    const confirmDelete = Platform.OS === 'web' 
+      ? window.confirm('Bạn có chắc chắn muốn xóa nhân viên này?')
+      : await new Promise((resolve) => {
+          // For React Native, would use Alert.alert here
+          resolve(true); // For now, just proceed
+        });
+
+    if (confirmDelete) {
+      try {
+        console.log('Deleting employee with ID:', employeeId);
+        const result = await deleteEmployee(employeeId);
+        
+        if (result.success) {
+          if (Platform.OS === 'web') {
+            window.alert('Đã xóa nhân viên thành công');
+          }
+          loadEmployees(); // Reload danh sách
+        } else {
+          const errorMsg = 'Không thể xóa nhân viên: ' + result.error;
+          if (Platform.OS === 'web') {
+            window.alert(errorMsg);
           }
         }
-      ]
-    );
+      } catch (error) {
+        console.error('Error deleting employee:', error);
+        const errorMsg = 'Đã xảy ra lỗi khi xóa nhân viên';
+        if (Platform.OS === 'web') {
+          window.alert(errorMsg);
+        }
+      }
+    }
   };
 
   const formatSalary = (salary) => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
-      currency: 'VND' 
-    }).format(salary);
+    if (!salary) return '0 VNĐ';
+    return `${parseInt(salary).toLocaleString('vi-VN')} VNĐ`;
   };
 
   const renderEmployeeCard = ({ item }) => (
@@ -133,13 +193,13 @@ export default function EmployeesScreen({ isDarkMode }) {
           <View style={styles.cardActions}>
             <TouchableOpacity 
               onPress={() => handleEditEmployee(item)}
-              style={styles.actionButton}
+              style={[styles.actionButton, styles.editButton]}
             >
               <Ionicons name="create-outline" size={20} color={Colors.darkGreen} />
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={() => handleDeleteEmployee(item.id)}
-              style={styles.actionButton}
+              style={[styles.actionButton, styles.deleteButton]}
             >
               <Ionicons name="trash-outline" size={20} color="#ef4444" />
             </TouchableOpacity>
@@ -174,11 +234,11 @@ export default function EmployeesScreen({ isDarkMode }) {
               Nhân viên
             </Text>
           </DataTable.Title>
-          <DataTable.Title>
+          {/* <DataTable.Title>
             <Text style={{ color: isDarkMode ? Colors.darkText : Colors.black, fontWeight: '600' }}>
               Chức vụ
             </Text>
-          </DataTable.Title>
+          </DataTable.Title> */}
           <DataTable.Title>
             <Text style={{ color: isDarkMode ? Colors.darkText : Colors.black, fontWeight: '600' }}>
               Email
@@ -269,10 +329,10 @@ export default function EmployeesScreen({ isDarkMode }) {
         }]}>Tổng: {filteredEmployees.length} nhân viên</Text>
       </View>
 
-      {/* Search Bar */}
+      {/* Search */}
       <View style={styles.searchContainer}>
         <Searchbar
-          placeholder="Tìm kiếm theo tên, email, số điện thoại, chức vụ..."
+          placeholder="Tìm kiếm theo tên, email, số điện thoại,..."
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={[styles.searchBar, { 
@@ -286,7 +346,33 @@ export default function EmployeesScreen({ isDarkMode }) {
 
       {/* Content */}
       <View style={styles.content}>
-        {isTablet ? renderTableView() : (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={[styles.loadingText, { 
+              color: isDarkMode ? Colors.darkText : Colors.black 
+            }]}>Đang tải danh sách nhân viên...</Text>
+          </View>
+        ) : filteredEmployees.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons 
+              name="people-outline" 
+              size={64} 
+              color={isDarkMode ? Colors.darkSecondary : Colors.gray} 
+            />
+            <Text style={[styles.emptyText, { 
+              color: isDarkMode ? Colors.darkText : Colors.black 
+            }]}>
+              {searchQuery ? 'Không tìm thấy nhân viên nào' : 'Chưa có nhân viên nào'}
+            </Text>
+            {!searchQuery && (
+              <Text style={[styles.emptySubtext, { 
+                color: isDarkMode ? Colors.darkSecondary : Colors.gray 
+              }]}>
+                Nhấn nút + để thêm nhân viên mới
+              </Text>
+            )}
+          </View>
+        ) : isTablet ? renderTableView() : (
           <FlatList
             data={filteredEmployees}
             renderItem={renderEmployeeCard}
@@ -297,7 +383,7 @@ export default function EmployeesScreen({ isDarkMode }) {
         )}
       </View>
 
-      {/* Floating Action Button */}
+      {/* FAB */}
       <FAB
         style={[styles.fab, { backgroundColor: Colors.darkGreen }]}
         icon="plus"
@@ -305,31 +391,21 @@ export default function EmployeesScreen({ isDarkMode }) {
         color="white"
       />
 
-      {/* Add/Edit Employee Modal */}
+      {/* Modal */}
       {showAddModal && (
         <EmployeeFormModal
           visible={showAddModal}
           employee={selectedEmployee}
           isDarkMode={isDarkMode}
-          onClose={() => setShowAddModal(false)}
-          onSave={(employeeData) => {
-            if (selectedEmployee) {
-              // Update existing employee
-              setEmployees(prev => 
-                prev.map(e => e.id === selectedEmployee.id ? { ...e, ...employeeData } : e)
-              );
-            } else {
-              // Add new employee
-              const newEmployee = {
-                id: Date.now().toString(),
-                ...employeeData,
-                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(employeeData.fullName)}&background=random`,
-                joinDate: new Date().toLocaleDateString('vi-VN'),
-                status: 'active'
-              };
-              setEmployees(prev => [newEmployee, ...prev]);
-            }
+          userData={userData}
+          onClose={() => {
             setShowAddModal(false);
+            setSelectedEmployee(null);
+          }}
+          onSave={(result) => {
+            setShowAddModal(false);
+            setSelectedEmployee(null);
+            loadEmployees();
           }}
         />
       )}
@@ -338,7 +414,7 @@ export default function EmployeesScreen({ isDarkMode }) {
 }
 
 // Component modal form thêm/sửa nhân viên
-function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
+function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave, userData }) {
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -346,14 +422,39 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
     address: '',
     position: '',
     salary: '',
-    gender: 'male', // Thêm trường giới tính
+    password: '', // Thêm trường mật khẩu
+    gender: 'male',
     height: '',
     weight: '',
     bodyMeasurements: []
   });
-  const [showBodyMeasurementModal, setShowBodyMeasurementModal] = useState(false);
-  const [hasNutritionData, setHasNutritionData] = useState(false);
-  const [hasBodyMeasurements, setHasBodyMeasurements] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  // Format number with VN locale
+  const formatNumber = (value) => {
+    if (!value) return '';
+    // Remove all non-digit characters
+    const number = value.toString().replace(/\D/g, '');
+    if (!number) return '';
+    // Format with VN locale
+    return parseInt(number).toLocaleString('vi-VN');
+  };
+
+  // Parse VN formatted number to integer
+  const parseNumber = (value) => {
+    if (!value) return 0;
+    // Remove all non-digit characters
+    const number = value.toString().replace(/\D/g, '');
+    return parseInt(number) || 0;
+  };
+
+  // Handle salary input with VN formatting
+  const handleSalaryChange = (text) => {
+    // Allow only digits and format with VN locale
+    const formatted = formatNumber(text);
+    setForm(prev => ({ ...prev, salary: formatted }));
+  };
 
   useEffect(() => {
     if (employee) {
@@ -363,37 +464,85 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
         phone: employee.phone || '',
         address: employee.address || '',
         position: employee.position || '',
-        salary: employee.salary || '',
-        height: employee.height || '',
-        weight: employee.weight || '',
+        salary: employee.salary ? formatNumber(employee.salary) : '',
+        password: '', // Không hiển thị mật khẩu hiện tại
+        gender: employee.gender || 'male',
+        height: employee.height?.toString() || '',
+        weight: employee.weight?.toString() || '',
         bodyMeasurements: employee.bodyMeasurements || []
       });
-      setHasNutritionData(!!employee.height && !!employee.weight);
-      setHasBodyMeasurements(employee.bodyMeasurements?.length > 0);
+    } else {
+      // Reset form khi tạo mới
+      setForm({
+        fullName: '',
+        email: '',
+        phone: '',
+        address: '',
+        position: '',
+        salary: '',
+        password: '',
+        gender: 'male',
+        height: '',
+        weight: '',
+        bodyMeasurements: []
+      });
     }
   }, [employee]);
 
-  const handleSave = () => {
-    if (!form.fullName || !form.email || !form.phone || !form.position) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin bắt buộc');
+  const handleSave = async () => {
+    // Validation
+    if (!form.fullName || !form.email || !form.position) {
+      setErrors({ general: 'Vui lòng điền đầy đủ thông tin bắt buộc' });
       return;
     }
-    onSave(form);
-  };
-
-  const handleUpdateNutrition = () => {
-    if (!form.height || !form.weight) {
-      Alert.alert('Lỗi', 'Vui lòng nhập chiều cao và cân nặng');
+    
+    // Validation mật khẩu cho trường hợp tạo mới
+    if (!employee && !form.password) {
+      setErrors({ password: 'Mật khẩu là bắt buộc khi tạo nhân viên mới' });
       return;
     }
-    setHasNutritionData(true);
-    Alert.alert('Thành công', 'Đã cập nhật thông tin thể chất');
-  };
 
-  const handleBodyMeasurementSave = (measurements) => {
-    setForm(prev => ({ ...prev, bodyMeasurements: measurements }));
-    setHasBodyMeasurements(measurements.length > 0);
-    setShowBodyMeasurementModal(false);
+    setLoading(true);
+    setErrors({});
+
+    try {
+      // Prepare data for API
+      const employeeData = {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+        gender: form.gender,
+        position: form.position,
+        salary: parseNumber(form.salary), // Convert VN formatted number to integer
+        chinhanhID: userData?.additional_info?.chinhanhID
+      };
+
+      // Include password if provided
+      if (form.password) {
+        employeeData.password = form.password;
+      }
+
+      let result;
+      if (employee) {
+        // Update existing employee
+        result = await updateEmployee(employee.id, employeeData);
+      } else {
+        // Create new employee
+        result = await createEmployee(employeeData);
+      }
+
+      if (result.success) {
+        onSave(result);
+      } else {
+        setErrors({ general: result.error || 'Có lỗi xảy ra' });
+      }
+    } catch (error) {
+      console.error('Error saving employee:', error);
+      setErrors({ general: 'Có lỗi xảy ra khi lưu thông tin' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -414,12 +563,23 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
           }]}>
             {employee ? 'Sửa Nhân Viên' : 'Thêm Nhân Viên'}
           </Text>
-          <TouchableOpacity onPress={handleSave}>
-            <Text style={[styles.saveButton, { color: Colors.darkGreen }]}>Lưu</Text>
+          <TouchableOpacity onPress={handleSave} disabled={loading}>
+            <Text style={[styles.saveButton, { 
+              color: loading ? Colors.gray : Colors.darkGreen 
+            }]}>
+              {loading ? 'Đang lưu...' : 'Lưu'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: 100 }}>
+          {/* Hiển thị lỗi chung */}
+          {errors.general && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{errors.general}</Text>
+            </View>
+          )}
+
           {/* Thông tin cơ bản */}
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
@@ -461,14 +621,14 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
                   color: isDarkMode ? Colors.darkText : Colors.black,
                   borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
                 }]}
-                placeholder="Số điện thoại *"
+                placeholder="Số điện thoại"
                 placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
                 value={form.phone}
                 onChangeText={(text) => setForm(prev => ({ ...prev, phone: text }))}
                 keyboardType="phone-pad"
               />
 
-              <TextInput
+              {/* <TextInput
                 style={[styles.input, { 
                   backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
                   color: isDarkMode ? Colors.darkText : Colors.black,
@@ -478,7 +638,7 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
                 placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
                 value={form.position}
                 onChangeText={(text) => setForm(prev => ({ ...prev, position: text }))}
-              />
+              /> */}
 
               <TextInput
                 style={[styles.input, { 
@@ -489,7 +649,7 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
                 placeholder="Lương (VNĐ)"
                 placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
                 value={form.salary}
-                onChangeText={(text) => setForm(prev => ({ ...prev, salary: text }))}
+                onChangeText={handleSalaryChange}
                 keyboardType="numeric"
               />
 
@@ -505,7 +665,24 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
                 onChangeText={(text) => setForm(prev => ({ ...prev, address: text }))}
               />
 
-              {/* Trường chọn giới tính */}
+              {/* Trường mật khẩu */}
+              <TextInput
+                style={[styles.input, { 
+                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
+                  color: isDarkMode ? Colors.darkText : Colors.black,
+                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                }]}
+                placeholder={employee ? "Mật khẩu mới (để trống nếu không đổi)" : "Mật khẩu *"}
+                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
+                value={form.password}
+                onChangeText={(text) => setForm(prev => ({ ...prev, password: text }))}
+                secureTextEntry
+              />
+              {errors.password && (
+                <Text style={styles.errorText}>{errors.password}</Text>
+              )}
+
+              {/* Giới tính */}
               <View style={[styles.pickerContainer, { 
                 backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
                 borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
@@ -527,155 +704,7 @@ function EmployeeFormModal({ visible, employee, isDarkMode, onClose, onSave }) {
             </Card.Content>
           </Card>
 
-          {/* Thông tin thể chất */}
-          <Card style={[styles.formSection, { 
-            backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
-            borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
-          }]}>
-            <Card.Content>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { 
-                  color: isDarkMode ? Colors.darkText : Colors.black 
-                }]}>Thông Tin Thể Chất</Text>
-                <Button
-                  mode={hasNutritionData ? "outlined" : "contained"}
-                  onPress={handleUpdateNutrition}
-                  style={styles.sectionButton}
-                  labelStyle={{ fontSize: 12 }}
-                >
-                  {hasNutritionData ? "Cập nhật" : "Thêm"}
-                </Button>
-              </View>
-
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
-                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                }]}
-                placeholder="Chiều cao (cm)"
-                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={form.height}
-                onChangeText={(text) => setForm(prev => ({ ...prev, height: text }))}
-                keyboardType="numeric"
-              />
-
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
-                  borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                }]}
-                placeholder="Cân nặng (kg)"
-                placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={form.weight}
-                onChangeText={(text) => setForm(prev => ({ ...prev, weight: text }))}
-                keyboardType="numeric"
-              />
-            </Card.Content>
-          </Card>
-
-          {/* Số đo cơ thể */}
-          <Card style={[styles.formSection, { 
-            backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
-            borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
-          }]}>
-            <Card.Content>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { 
-                  color: isDarkMode ? Colors.darkText : Colors.black 
-                }]}>Số Đo Cơ Thể</Text>
-                <Button
-                  mode={hasBodyMeasurements ? "outlined" : "contained"}
-                  onPress={() => setShowBodyMeasurementModal(true)}
-                  style={styles.sectionButton}
-                  labelStyle={{ fontSize: 12 }}
-                >
-                  {hasBodyMeasurements ? "Cập nhật" : "Thêm"}
-                </Button>
-              </View>
-
-              {hasBodyMeasurements && (
-                <View style={styles.measurementsList}>
-                  {form.bodyMeasurements.map((measurement, index) => (
-                    <View key={index} style={[styles.measurementItem, {
-                      backgroundColor: isDarkMode ? Colors.darkBackground : '#f9fafb',
-                      borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                    }]}>
-                      <Text style={[styles.measurementName, { 
-                        color: isDarkMode ? Colors.darkText : Colors.black 
-                      }]}>{measurement.name}</Text>
-                      <Text style={[styles.measurementValue, { 
-                        color: isDarkMode ? Colors.darkSecondary : Colors.gray 
-                      }]}>{measurement.value} cm</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        </ScrollView>
-
-        {/* Body Measurement Modal */}
-        {showBodyMeasurementModal && (
-          <BodyMeasurementModal
-            visible={showBodyMeasurementModal}
-            measurements={form.bodyMeasurements}
-            isDarkMode={isDarkMode}
-            onClose={() => setShowBodyMeasurementModal(false)}
-            onSave={handleBodyMeasurementSave}
-          />
-        )}
-      </View>
-    </Modal>
-  );
-}
-
-// Component modal số đo cơ thể (tái sử dụng từ CustomersScreen)
-function BodyMeasurementModal({ visible, measurements, isDarkMode, onClose, onSave }) {
-  const [measurementList, setMeasurementList] = useState(measurements || []);
-  const [newMeasurement, setNewMeasurement] = useState({ name: '', value: '' });
-
-  const addMeasurement = () => {
-    if (!newMeasurement.name || !newMeasurement.value) {
-      Alert.alert('Lỗi', 'Vui lòng nhập tên bộ phận và số đo');
-      return;
-    }
-    
-    setMeasurementList(prev => [...prev, { ...newMeasurement }]);
-    setNewMeasurement({ name: '', value: '' });
-  };
-
-  const removeMeasurement = (index) => {
-    setMeasurementList(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSave = () => {
-    onSave(measurementList);
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={[styles.modalContainer, { 
-        backgroundColor: isDarkMode ? Colors.darkBackground : '#f9fafb' 
-      }]}>
-        <View style={[styles.modalHeader, { 
-          backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
-          borderBottomColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
-        }]}>
-          <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color={isDarkMode ? Colors.darkText : Colors.black} />
-          </TouchableOpacity>
-          <Text style={[styles.modalTitle, { 
-            color: isDarkMode ? Colors.darkText : Colors.black 
-          }]}>Số Đo Cơ Thể</Text>
-          <TouchableOpacity onPress={handleSave}>
-            <Text style={[styles.saveButton, { color: Colors.darkGreen }]}>Lưu</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.modalContent}>
-          {/* Form thêm số đo mới */}
+          {/* Thông tin thể chất (read-only) */}
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
             borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
@@ -683,79 +712,78 @@ function BodyMeasurementModal({ visible, measurements, isDarkMode, onClose, onSa
             <Card.Content>
               <Text style={[styles.sectionTitle, { 
                 color: isDarkMode ? Colors.darkText : Colors.black 
-              }]}>Thêm Số Đo Mới</Text>
-              
+              }]}>Thông Tin Thể Chất</Text>
+
               <TextInput
                 style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
+                  backgroundColor: isDarkMode ? Colors.darkSecondary + '30' : '#f5f5f5',
+                  color: isDarkMode ? Colors.darkSecondary : Colors.gray,
                   borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
                 }]}
-                placeholder="Tên bộ phận (VD: Vòng ngực)"
+                placeholder="Chiều cao (cm)"
                 placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={newMeasurement.name}
-                onChangeText={(text) => setNewMeasurement(prev => ({ ...prev, name: text }))}
+                value={form.height}
+                editable={false}
               />
 
               <TextInput
                 style={[styles.input, { 
-                  backgroundColor: isDarkMode ? Colors.darkBackground : 'white',
-                  color: isDarkMode ? Colors.darkText : Colors.black,
+                  backgroundColor: isDarkMode ? Colors.darkSecondary + '30' : '#f5f5f5',
+                  color: isDarkMode ? Colors.darkSecondary : Colors.gray,
                   borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
                 }]}
-                placeholder="Số đo (cm)"
+                placeholder="Cân nặng (kg)"
                 placeholderTextColor={isDarkMode ? Colors.darkSecondary : Colors.gray}
-                value={newMeasurement.value}
-                onChangeText={(text) => setNewMeasurement(prev => ({ ...prev, value: text }))}
-                keyboardType="numeric"
+                value={form.weight}
+                editable={false}
               />
 
-              <Button
-                mode="contained"
-                onPress={addMeasurement}
-                style={[styles.addButton, { backgroundColor: Colors.darkGreen }]}
-                icon="plus"
-              >
-                Thêm Bộ Phận
-              </Button>
+              <Text style={[styles.readOnlyNotice, {
+                color: isDarkMode ? Colors.darkSecondary : Colors.gray
+              }]}>
+                ℹ️ Thông tin thể chất chỉ được xem, không thể chỉnh sửa
+              </Text>
             </Card.Content>
           </Card>
-
-          {/* Danh sách số đo */}
-          {measurementList.length > 0 && (
-            <Card style={[styles.formSection, { 
-              backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
-              borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
-            }]}>
-              <Card.Content>
-                <Text style={[styles.sectionTitle, { 
-                  color: isDarkMode ? Colors.darkText : Colors.black 
-                }]}>Danh Sách Số Đo</Text>
-                
-                {measurementList.map((measurement, index) => (
-                  <View key={index} style={[styles.measurementRow, {
-                    backgroundColor: isDarkMode ? Colors.darkBackground : '#f9fafb',
-                    borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
-                  }]}>
-                    <View style={styles.measurementInfo}>
-                      <Text style={[styles.measurementName, { 
-                        color: isDarkMode ? Colors.darkText : Colors.black 
-                      }]}>{measurement.name}</Text>
-                      <Text style={[styles.measurementValue, { 
-                        color: isDarkMode ? Colors.darkSecondary : Colors.gray 
-                      }]}>{measurement.value} cm</Text>
-                    </View>
-                    <TouchableOpacity 
-                      onPress={() => removeMeasurement(index)}
-                      style={styles.deleteButton}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </Card.Content>
-            </Card>
-          )}
+          {/* Số đo cơ thể */}
+                    <Card style={[styles.formSection, { 
+                      backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
+                      borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
+                    }]}>
+                      <Card.Content>
+                        <View style={styles.sectionHeader}>
+                          <Text style={[styles.sectionTitle, { 
+                            color: isDarkMode ? Colors.darkText : Colors.black 
+                          }]}>Số Đo Cơ Thể</Text>
+                          {/* Button luôn bị ẩn - chỉ đọc cho tất cả trường hợp */}
+                        </View>
+          
+                        {form.bodyMeasurements && form.bodyMeasurements.length > 0 && (
+                          <View style={styles.measurementsList}>
+                            {form.bodyMeasurements.map((measurement, index) => (
+                              <View key={index} style={[styles.measurementItem, {
+                                backgroundColor: isDarkMode ? Colors.darkBackground : '#f9fafb',
+                                borderColor: isDarkMode ? Colors.darkSecondary : '#e5e7eb'
+                              }]}>
+                                <Text style={[styles.measurementName, { 
+                                  color: isDarkMode ? Colors.darkText : Colors.black 
+                                }]}>{measurement.name}</Text>
+                                <Text style={[styles.measurementValue, { 
+                                  color: isDarkMode ? Colors.darkSecondary : Colors.gray 
+                                }]}>{measurement.value} cm</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+          
+                        {/* Luôn hiển thị thông báo read-only */}
+                        <Text style={[styles.readOnlyNotice, {
+                          color: isDarkMode ? Colors.darkSecondary : Colors.gray
+                        }]}>
+                          ℹ️ Số đo cơ thể chỉ được xem, không thể chỉnh sửa
+                        </Text>
+                      </Card.Content>
+                    </Card>
         </ScrollView>
       </View>
     </Modal>
@@ -815,12 +843,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
-  positionContainer: {
-    marginBottom: 4,
-  },
-  positionChip: {
-    alignSelf: 'flex-start',
-  },
   employeeEmail: {
     fontSize: 14,
     marginBottom: 2,
@@ -833,7 +855,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
-    padding: 8,
+    padding: 12,
+    minWidth: 40,
+    minHeight: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1001,
+  },
+  editButton: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
   },
   employeeMeta: {
     marginTop: 12,
@@ -850,6 +884,33 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 0,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
   },
   tableContainer: {
     margin: 16,
@@ -894,22 +955,28 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
   },
+  errorContainer: {
+    margin: 16,
+    padding: 12,
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   formSection: {
     margin: 16,
     borderWidth: 1,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  sectionButton: {
-    minWidth: 80,
+    marginBottom: 16,
   },
   input: {
     borderWidth: 1,
@@ -935,51 +1002,10 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
   },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  halfInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  measurementsList: {
-    gap: 8,
-  },
-  measurementItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  measurementName: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  measurementValue: {
-    fontSize: 14,
-  },
-  addButton: {
+  readOnlyNotice: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
     marginTop: 8,
-  },
-  measurementRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  measurementInfo: {
-    flex: 1,
-  },
-  deleteButton: {
-    padding: 4,
   },
 });

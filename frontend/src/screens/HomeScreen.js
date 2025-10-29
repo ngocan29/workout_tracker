@@ -15,6 +15,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Navbar from '../components/ui/Navbar';
 import { Colors } from '../constants/Colors';
+import { getCustomersByBranch, getCustomersByEmployee } from '../services/customerApi';
+import { getEmployeesByBranch } from '../services/employeeApi';
+import CustomerFormModal from '../components/CustomerFormModal';
+import EmployeeFormModal from '../components/EmployeeFormModal.js';
 
 export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userData }) {
   // Hiển thị tên user và thông tin chi nhánh
@@ -31,15 +35,58 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
   const [goalHistory, setGoalHistory] = useState([]);
   const [currentStreak, setCurrentStreak] = useState(0);
   
+  // State để lưu số lượng thực tế
+  const [customerCount, setCustomerCount] = useState(0);
+  const [employeeCount, setEmployeeCount] = useState(0);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  
+  // State để quản lý modal
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+
+  // Load số lượng khách hàng và nhân viên thực tế
+  const loadRealData = useCallback(async () => {
+    if (!userData) return;
+    
+    try {
+      const currentBranchId = userData.additional_info?.chinhanhID || userData.chinhanhID;
+      if (!currentBranchId) return;
+
+      // Load customers
+      let customersData = [];
+      if (userData.loai_tai_khoan === 'business') {
+        customersData = await getCustomersByBranch(currentBranchId);
+      } else if (userData.additional_info?.vai_tro === 'nhanvien') {
+        customersData = await getCustomersByEmployee(userData._id, currentBranchId);
+      }
+      setCustomerCount(customersData.length);
+
+      // Load employees (chỉ cho business user)
+      if (userData.loai_tai_khoan === 'business') {
+        const employeesResponse = await getEmployeesByBranch(currentBranchId);
+        const employeesData = employeesResponse.success ? employeesResponse.data : [];
+        setEmployeeCount(employeesData.length);
+      }
+      
+      setDataLoaded(true);
+    } catch (error) {
+      console.error('Error loading real data:', error);
+      // Fallback to default values
+      setCustomerCount(0);
+      setEmployeeCount(0);
+      setDataLoaded(true);
+    }
+  }, [userData]);
+
   const data = userData?.loai_tai_khoan === 'business' 
     ? [
-        { value: userData?.so_khach_hang || 3, label: "Số Khách Hàng" },
-        { value: userData?.so_nhan_vien || 2, label: "Số Nhân Viên" },
+        { value: dataLoaded ? customerCount : (userData?.so_khach_hang || 0), label: "Số Khách Hàng" },
+        { value: dataLoaded ? employeeCount : (userData?.so_nhan_vien || 0), label: "Số Nhân Viên" },
         { value: 11, label: "Số Bài Tập" }
       ]
     : userData?.loai_tai_khoan === 'personal' && userData?.additional_info?.vai_tro === 'nhanvien'
     ? [
-        { value: userData?.so_khach_hang || 2, label: "Số Khách Hàng" },
+        { value: dataLoaded ? customerCount : (userData?.so_khach_hang || 0), label: "Số Khách Hàng" },
         { value: userData?.lich_hen_gan_nhat || 2, label: "Lịch hẹn gần nhất" },
         { value: 11, label: "Số Bài Tập" },
       ]
@@ -148,6 +195,36 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
     }
     loadGoalHistory();
   }, [isPersonal, checkTodayGoal, loadGoalHistory]);
+
+  useEffect(() => {
+    // Load dữ liệu thực tế khi có userData
+    if (userData) {
+      loadRealData();
+    }
+  }, [userData, loadRealData]);
+
+  // Handlers cho các actions
+  const handleAddCustomer = () => {
+    setShowCustomerModal(true);
+  };
+
+  const handleAddEmployee = () => {
+    setShowEmployeeModal(true);
+  };
+
+  const handleCustomerSave = (result) => {
+    console.log('Customer saved:', result);
+    setShowCustomerModal(false);
+    // Reload data để cập nhật số lượng
+    loadRealData();
+  };
+
+  const handleEmployeeSave = (result) => {
+    console.log('Employee saved:', result);
+    setShowEmployeeModal(false);
+    // Reload data để cập nhật số lượng
+    loadRealData();
+  };
 
   const renderGoalModal = () => (
     <Modal
@@ -293,7 +370,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
             
             {/* Nút Thêm Khách hàng - hiển thị cho Business và Employee */}
             {(isBusiness || isEmployee) && (
-              <TouchableOpacity style={styles.actionCard}>
+              <TouchableOpacity style={styles.actionCard} onPress={handleAddCustomer}>
                 <View style={[styles.actionIcon, { backgroundColor: '#e0f2fe' }]}>
                   <Ionicons name="person-add" size={24} color="#0288d1" />
                 </View>
@@ -306,7 +383,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
             
             {/* Nút Thêm Nhân viên - chỉ hiển thị cho Business */}
             {isBusiness && (
-              <TouchableOpacity style={styles.actionCard}>
+              <TouchableOpacity style={styles.actionCard} onPress={handleAddEmployee}>
                 <View style={[styles.actionIcon, { backgroundColor: '#f3e5f5' }]}>
                   <Ionicons name="people" size={24} color="#7b1fa2" />
                 </View>
@@ -407,6 +484,29 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
         )}
 
       </ScrollView>
+      
+      {/* Customer Form Modal */}
+      {showCustomerModal && (
+        <CustomerFormModal
+          visible={showCustomerModal}
+          customer={null} // null for new customer
+          isDarkMode={isDarkMode}
+          onClose={() => setShowCustomerModal(false)}
+          onSave={handleCustomerSave}
+        />
+      )}
+
+      {/* Employee Form Modal */}
+      {showEmployeeModal && (
+        <EmployeeFormModal
+          visible={showEmployeeModal}
+          employee={null} // null for new employee
+          isDarkMode={isDarkMode}
+          userData={userData}
+          onClose={() => setShowEmployeeModal(false)}
+          onSave={handleEmployeeSave}
+        />
+      )}
     </View>
   );
 }

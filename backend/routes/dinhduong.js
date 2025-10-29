@@ -3,58 +3,73 @@ const router = express.Router();
 const Dinhduong = require('../models/DinhDuong');
 const User = require('../models/User');
 
+// GET: Lấy dinh dưỡng của khách hàng (mới nhất)
 router.get('/', async (req, res) => {
   try {
-    const dinhduong = await Dinhduong.find();
-    res.json(dinhduong);
+    const { khachhangUserID } = req.query;
+    if (!khachhangUserID) return res.status(400).json({ error: 'Thiếu khachhangUserID' });
+
+    const dinhduong = await Dinhduong.find({ khachhangUserID })
+      .sort({ ngaytao: -1 })
+      .limit(1);
+
+    res.json(dinhduong[0] || null);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// POST: Tạo mới + tính toán luongnuoc
 router.post('/', async (req, res) => {
-  const dinhduong = new Dinhduong({
-    ...req.body,
-    ngaytao: req.body.ngaytao || new Date()
-  });
   try {
-    const newDinhduong = await dinhduong.save();
-    res.status(201).json(newDinhduong);
+    const {
+      khachhangUserID,
+      userID,
+      chieucao,
+      cannang,
+      calo = 0,
+      nuocDaUong = 0,
+    } = req.body;
+
+    if (!khachhangUserID || !chieucao || !cannang) {
+      return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
+    }
+
+    // Tính lượng nước cần uống (L)
+    const luongnuoc = ((cannang * 30) + (chieucao * 10)) / 1000;
+
+    const dinhduong = new Dinhduong({
+      khachhangUserID,
+      userID: userID || null,
+      chieucao: Number(chieucao),
+      cannang: Number(cannang),
+      luongnuoc: Number(luongnuoc.toFixed(2)),
+      calo: Number(calo),
+      ngaytao: new Date(),
+    });
+
+    const saved = await dinhduong.save(); // pre-save sẽ tính BMI, LBM
+    res.status(201).json(saved);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.get('/:id', async (req, res) => {
-  try {
-    const dinhduong = await Dinhduong.findById(req.params.id);
-    if (!dinhduong) return res.status(404).json({ error: 'Dinhduong not found' });
-    res.json(dinhduong);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
+// PUT: Cập nhật nước đã uống
 router.put('/:id', async (req, res) => {
   try {
+    const { nuocDaUong } = req.body;
     const dinhduong = await Dinhduong.findById(req.params.id);
-    if (!dinhduong) return res.status(404).json({ error: 'Dinhduong not found' });
-    Object.assign(dinhduong, req.body);
+    if (!dinhduong) return res.status(404).json({ error: 'Not found' });
+
+    // Không thay đổi luongnuoc, chỉ cập nhật calo nếu cần
+    if (nuocDaUong !== undefined) {
+      dinhduong.calo = Number(nuocDaUong) * 1000; // giả sử 1L = 1000 calo (tạm)
+    }
     await dinhduong.save();
     res.json(dinhduong);
   } catch (err) {
     res.status(400).json({ error: err.message });
-  }
-});
-
-router.delete('/:id', async (req, res) => {
-  try {
-    const dinhduong = await Dinhduong.findById(req.params.id);
-    if (!dinhduong) return res.status(404).json({ error: 'Dinhduong not found' });
-    await dinhduong.remove();
-    res.json({ message: 'Dinhduong deleted' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
 });
 

@@ -15,7 +15,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Avatar, Card, Button, Title } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Colors } from '../constants/Colors';
 import { AuthService } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,7 +23,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width } = Dimensions.get('window');
 
 export default function EditProfileScreen({ setCurrentScreen, userData: propUserData, branchData }) {
-  const router = useRouter();
   const { userData } = useLocalSearchParams();
   
   // Parse userData từ props hoặc params
@@ -43,25 +42,23 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
     if (isNhanVien) return 'Cập nhật thông tin nhân viên';
     return 'Cập nhật thông tin';
   };
-  
-  // Mock navigation object để tương thích với existing code
-  const navigation = {
-    goBack: () => setCurrentScreen ? setCurrentScreen('profile') : null,
-    navigate: (screen) => {
-      if (screen === 'Profile' && setCurrentScreen) {
-        setCurrentScreen('profile');
-      }
-    }
+  // Business form state - store initial and current values
+  const initialBusinessData = {
+    ten: parsedUserData.ten || '',
+    sodienthoai: parsedUserData.sodienthoai || '',
+    diachi: parsedUserData.diachi || '',
+    email: parsedUserData.email || '',
+    nguoidaidien: parsedUserData.nguoidaidien || ''
   };
-  // Business form state
-  const [ten, setTen] = useState(parsedUserData.ten || '');
-  const [sodienthoai, setSodienthoai] = useState(parsedUserData.sodienthoai || '');
-  const [diachi, setDiachi] = useState(parsedUserData.diachi || '');
-  const [email] = useState(parsedUserData.email || '');
-  const [nguoidaidien, setNguoidaidien] = useState(parsedUserData.nguoidaidien || '');
   
-  // Personal form state (existing)
-  const [form, setForm] = useState({
+  const [ten, setTen] = useState(initialBusinessData.ten);
+  const [sodienthoai, setSodienthoai] = useState(initialBusinessData.sodienthoai);
+  const [diachi, setDiachi] = useState(initialBusinessData.diachi);
+  const [email] = useState(initialBusinessData.email);
+  const [nguoidaidien, setNguoidaidien] = useState(initialBusinessData.nguoidaidien);
+  
+  // Personal form state (existing) - store initial values
+  const initialPersonalData = {
     fullName: 'Nguyễn Minh Tuấn',
     email: 'minhtuan.fitness@gmail.com',
     phone: '0901234567',
@@ -73,7 +70,9 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
     chest: '95',
     thigh: '58',
     arm: '32',
-  });
+  };
+  
+  const [form, setForm] = useState(initialPersonalData);
   
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -273,8 +272,17 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
         {
           text: 'Có',
           onPress: () => {
-            // Navigate back or to specific screen
-            navigation.navigate('Profile'); // Hoặc hardcode URL nếu cần
+            // Reset form data to initial values
+            if (isBusiness) {
+              setTen(initialBusinessData.ten);
+              setSodienthoai(initialBusinessData.sodienthoai);
+              setDiachi(initialBusinessData.diachi);
+              setNguoidaidien(initialBusinessData.nguoidaidien);
+            } else {
+              setForm(initialPersonalData);
+            }
+            // Navigate back to profile
+            setCurrentScreen('profile');
           },
         },
       ]
@@ -283,10 +291,23 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
 
   // Render Business Form (simple)
   const renderBusinessForm = () => (
-    <ScrollView style={[businessStyles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white }]}>
-      <Text style={[businessStyles.title, { color: isDarkMode ? Colors.darkText : Colors.primary }]}>
-        {getFormTitle()}
-      </Text>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white }]}>
+      {/* Header với back button */}
+      <View style={[styles.header, { 
+        backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
+        borderBottomColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
+      }]}>
+        <TouchableOpacity onPress={() => setCurrentScreen('profile')} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={isDarkMode ? Colors.darkText : "#6b7280"} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>{getFormTitle()}</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      
+      <ScrollView style={[businessStyles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.white }]}>
+        <Text style={[businessStyles.title, { color: isDarkMode ? Colors.darkText : Colors.primary }]}>
+          {getFormTitle()}
+        </Text>
       
       <TextInput
         style={[businessStyles.input, { 
@@ -353,20 +374,7 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
       />
       
       <View style={businessStyles.actions}>
-        <Button 
-          mode="outlined"
-          style={[businessStyles.button, businessStyles.cancelButton]}
-          onPress={() => {
-            if (router && typeof router.back === 'function') {
-              router.back();
-            } else {
-              navigation.goBack();
-            }
-          }}
-          icon="close"
-        >
-          Hủy
-        </Button>
+        
         <Button 
           mode="contained"
           style={[businessStyles.button, businessStyles.saveButton]}
@@ -408,11 +416,7 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
                 style={[businessStyles.modalButton, businessStyles.modalBackButton]}
                 onPress={() => {
                   setShowSuccessModal(false);
-                  if (router && typeof router.back === 'function') {
-                    router.back();
-                  } else {
-                    navigation.goBack();
-                  }
+                  setCurrentScreen('profile');
                 }}
               >
                 Quay về
@@ -421,7 +425,8 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 
   // Render business form cho business users
@@ -437,7 +442,7 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
         backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
         borderBottomColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
       }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => setCurrentScreen('profile')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={isDarkMode ? Colors.darkText : "#6b7280"} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>Thông Tin Cá Nhân</Text>
@@ -713,7 +718,7 @@ export default function EditProfileScreen({ setCurrentScreen, userData: propUser
                 style={[styles.modalButton, styles.modalBackButton]}
                 onPress={() => {
                   setShowSuccessModal(false);
-                  navigation.navigate('Profile'); // Hoặc hardcode navigation
+                  setCurrentScreen('profile');
                 }}
               >
                 Quay về

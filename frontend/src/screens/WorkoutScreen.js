@@ -1,13 +1,7 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, Alert, Platform} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 import { Title, Button } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MoreVertical, Edit, Trash2 } from 'react-native-feather';
@@ -19,7 +13,36 @@ import { WorkoutService } from '../services/api';
 export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
   const router = useRouter();
   const [activeDropdown, setActiveDropdown] = useState(null);
-  
+  const [workouts, setWorkouts] = useState([]);
+
+  //Đưa ra ngoài để có thể gọi lại ở nhiều nơi
+const fetchWorkouts = async () => {
+  try {
+    const response = await WorkoutService.getWorkouts();
+    const rawData = response.data || response;
+    const formatted = rawData.map(item => ({
+      id: item._id,
+      name: item.ten || 'Không có tên',
+      duration: item.thoigiangoc ? `${item.thoigiangoc} phút` : 'Chưa rõ',
+      calories: item.calotieuthukhoiluong || 0,
+      completed: item.trangthai === 'hoanthanh',
+      image: item.anhminhhoa || 'https://via.placeholder.com/300x200/ccc/000?text=No+Image'
+    }));
+    setWorkouts(formatted);
+  } catch (error) {
+    console.error("Lỗi khi tải danh sách bài tập:", error);
+  }
+};
+
+//Gọi lại khi trang được focus lại (vd sau khi thêm/sửa)
+useFocusEffect(
+  useCallback(() => {
+    fetchWorkouts();
+  }, [])
+);
+
+
+  //fomat mau
   const workoutData = [
     {
       id: 1,
@@ -77,33 +100,47 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
     });
   };
 
-  const handleDeleteWorkout = async (workout) => {
-    setActiveDropdown(null);
+const handleDeleteWorkout = async (workoutId) => {
+  try {
+    if (Platform.OS === "web") {
+      const confirmDelete = window.confirm("Bạn có chắc muốn xóa bài tập này không?");
+      if (!confirmDelete) return;
+
+      const res = await WorkoutService.deleteWorkout(workoutId);
+      console.log(" Xóa thành công:", res);
+      window.alert("Đã xóa bài tập!");
+      await fetchWorkouts();
+      return;
+    }
+
     Alert.alert(
-      'Xóa bài tập',
-      `Bạn có chắc chắn muốn xóa bài tập "${workout.name}" không?`,
+      "Xác nhận xóa",
+      "Bạn có chắc muốn xóa bài tập này không?",
       [
+        { text: "Hủy", style: "cancel" },
         {
-          text: 'Hủy',
-          style: 'cancel',
-        },
-        {
-          text: 'Xóa',
-          style: 'destructive',
+          text: "Xóa",
+          style: "destructive",
           onPress: async () => {
-            try {
-              await WorkoutService.deleteWorkout(workout.id);
-              Alert.alert('Thành công', 'Bài tập đã được xóa!');
-              // TODO: Refresh workout list
-            } catch (error) {
-              console.error('Error deleting workout:', error);
-              Alert.alert('Lỗi', 'Có lỗi xảy ra khi xóa bài tập');
-            }
+            const res = await WorkoutService.deleteWorkout(workoutId);
+            console.log("✅ Xóa thành công:", res);
+            Alert.alert("Thành công", "Đã xóa bài tập!");
+            await fetchWorkouts();
           },
         },
       ]
     );
-  };
+  } catch (error) {
+    console.error("💥 Lỗi khi xóa bài tập:", error);
+    if (Platform.OS === "web") {
+      window.alert("Lỗi: Không thể xóa bài tập!");
+    } else {
+      Alert.alert("Lỗi", "Không thể xóa bài tập!");
+    }
+  }
+};
+
+
 
   return (
     <TouchableOpacity 
@@ -157,7 +194,7 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
               Thêm Mới
             </Button>
           </View>
-          {workoutData.map((workout) => (
+          {workouts.map((workout) => (
             <View key={workout.id} style={styles.workoutCard}>
               <TouchableOpacity
                 style={styles.workoutCardContent}
@@ -211,7 +248,7 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.dropdownItem}
-                      onPress={() => handleDeleteWorkout(workout)}
+                      onPress={() => handleDeleteWorkout(workout._id || workout.id)}
                     >
                       <Trash2 stroke="#e74c3c" width={16} height={16} />
                       <Text style={[styles.dropdownText, { color: '#e74c3c' }]}>Xóa</Text>
@@ -223,7 +260,7 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
           ))}
         </View>
 
-        {/* Public Workouts | Của công ty hoặc Nhân viên nên Personal sẽ bỏ phần này */}
+        {/* Public Workouts | Của công ty hoặc có sẵn */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>

@@ -3,95 +3,43 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   FlatList,
   StyleSheet,
   Dimensions,
   Alert,
+  Platform,
 } from 'react-native';
 import { Card, FAB, Avatar, Searchbar, DataTable } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import CustomerFormModal from '../components/CustomerFormModal';
+import { getCustomersByBranch, getCustomersByEmployee, deleteCustomer } from '../services/customerApi';
 
 const { width } = Dimensions.get('window');
 const isTablet = width > 768;
-// Business thì hiện đầy đủ khách hàng của chinhanh (nếu Khách hàng có Nhân viên phụ trách thì trên thẻ hiển thị mã nhân viên phụ trách nữa) còn NhanVien chỉ hiển thị khách hàng của mình
+
 export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState(null);
 
   useEffect(() => {
-    loadCustomers();
-  }, [userRole]);
+    loadUserData();
+  }, []);
 
-  const loadCustomers = () => {
-    // Sample data - replace with API calls
-    const allCustomers = [
-      {
-        id: '1',
-        fullName: 'Nguyễn Văn An',
-        email: 'nguyenvanan@gmail.com',
-        phone: '0901234567',
-        address: '123 Lê Lợi, Q1, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Nguyen+Van+An&background=random',
-        joinDate: '2024-01-15',
-        status: 'active',
-        assignedEmployee: 'NV001', // Mã nhân viên phụ trách
-        employeeName: 'Phạm Thành Đạt'
-      },
-      {
-        id: '2', 
-        fullName: 'Trần Thị Bình',
-        email: 'tranthibinh@gmail.com',
-        phone: '0907654321',
-        address: '456 Nguyễn Huệ, Q1, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Tran+Thi+Binh&background=random',
-        joinDate: '2024-02-20',
-        status: 'active',
-        assignedEmployee: 'NV002', // Mã nhân viên phụ trách
-        employeeName: 'Lê Thị Mai'
-      },
-      {
-        id: '3',
-        fullName: 'Lê Văn Cường',
-        email: 'levancuong@gmail.com',
-        phone: '0912345678',
-        address: '789 Võ Văn Tần, Q3, HCM',
-        avatar: 'https://ui-avatars.com/api/?name=Le+Van+Cuong&background=random',
-        joinDate: '2024-03-10',
-        status: 'active',
-        assignedEmployee: 'NV001', // Cùng nhân viên với khách hàng đầu
-        employeeName: 'Phạm Thành Đạt'
-      },
-    ];
-
-    // Filter customers based on user role
-    let filteredData = allCustomers;
-    if (userRole === 'nhanvien') {
-      // NhanVien chỉ hiển thị khách hàng của mình
-      // In real app, this would filter by current employee ID
-      filteredData = allCustomers.filter(customer => customer.assignedEmployee === 'NV001');
+  useEffect(() => {
+    if (userData) {
+      loadCustomers();
     }
-    // Business thì hiện đầy đủ khách hàng của chinhanh
-
-    setCustomers(filteredData);
-  };
+  }, [userData, userRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    loadCustomers();
-  }, [userRole]);
-
-  useEffect(() => {
-    if (!searchQuery) {
-      setFilteredCustomers(customers);
-      return;
-    }
-
-    const filtered = customers.filter(customer => 
+    const filtered = customers.filter(customer =>
       customer.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.phone.includes(searchQuery)
@@ -99,31 +47,108 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
     setFilteredCustomers(filtered);
   }, [searchQuery, customers]);
 
+  const loadUserData = async () => {
+    try {
+      const user = await AsyncStorage.getItem('userData');
+      if (user) {
+        setUserData(JSON.parse(user));
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const loadCustomers = async () => {
+    if (!userData) return;
+    
+    try {
+      setLoading(true);
+      let customersData = [];
+      
+      // Xác định chi nhánh hiện tại
+      const currentBranchId = userData.additional_info?.chinhanhID || userData.chinhanhID;
+      
+      if (!currentBranchId) {
+        Alert.alert('Lỗi', 'Không tìm thấy thông tin chi nhánh');
+        return;
+      }
+
+      // TH1: Business - lấy tất cả khách hàng trong chi nhánh
+      if (userData.loai_tai_khoan === 'business' || userRole === 'business') {
+        customersData = await getCustomersByBranch(currentBranchId);
+      }
+      // TH2: Nhân viên - chỉ lấy khách hàng được phân công
+      else if (userData.additional_info?.vai_tro === 'nhanvien' || userRole === 'nhanvien') {
+        customersData = await getCustomersByEmployee(userData._id, currentBranchId);
+      }
+
+      // Transform data để phù hợp với UI
+      const transformedCustomers = customersData.map(customer => ({
+        id: customer._id,
+        fullName: customer.ten,
+        email: customer.email,
+        phone: customer.sodienthoai || 'Chưa có',
+        address: customer.diachi || 'Chưa có địa chỉ',
+        avatar: customer.hinhanh || `https://ui-avatars.com/api/?name=${encodeURIComponent(customer.ten)}&background=random`,
+        joinDate: new Date(customer.ngayvao || customer.additional_info?.ngaydangky).toLocaleDateString('vi-VN'),
+        assignedEmployee: customer.additional_info?.nhanvienUserID || null,
+        rawData: customer
+      }));
+
+      setCustomers(transformedCustomers);
+    } catch (error) {
+      console.error('Error loading customers:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh sách khách hàng');
+      // Fallback to empty data if API fails
+      setCustomers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddCustomer = () => {
     setSelectedCustomer(null);
     setShowAddModal(true);
   };
 
   const handleEditCustomer = (customer) => {
-    setSelectedCustomer(customer);
+    console.log('handleEditCustomer called with:', customer);
+    // Truyền rawData thay vì transformed data để CustomerFormModal có đầy đủ thông tin
+    setSelectedCustomer(customer.rawData || customer);
     setShowAddModal(true);
   };
 
   const handleDeleteCustomer = (customerId) => {
-    Alert.alert(
-      'Xác nhận xóa',
-      'Bạn có chắc chắn muốn xóa khách hàng này?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Xóa', 
-          style: 'destructive',
-          onPress: () => {
-            setCustomers(prev => prev.filter(c => c.id !== customerId));
-          }
-        }
-      ]
-    );
+    console.log('handleDeleteCustomer called with ID:', customerId);
+    
+    // Sử dụng window.confirm cho web platform
+    const confirmed = window.confirm('Bạn có chắc chắn muốn xóa khách hàng này?');
+    
+    if (confirmed) {
+      executeDelete(customerId);
+    }
+  };
+
+  const executeDelete = async (customerId) => {
+    console.log('User confirmed delete for customer ID:', customerId);
+    try {
+      const result = await deleteCustomer(customerId);
+      console.log('Delete result:', result);
+      if (result.success) {
+        // Reload customer list after successful deletion
+        await loadCustomers();
+        
+        // Hiển thị thông báo thành công
+        window.alert('Thành công: ' + (result.message || 'Xóa khách hàng thành công'));
+      } else {
+        throw new Error(result.error || 'Có lỗi xảy ra');
+      }
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      
+      // Hiển thị thông báo lỗi
+      window.alert('Lỗi: ' + (error.message || 'Có lỗi xảy ra khi xóa khách hàng'));
+    }
   };
 
   const renderCustomerCard = ({ item }) => (
@@ -149,18 +174,26 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
               <Text style={[styles.customerPhone, { 
                 color: isDarkMode ? Colors.darkSecondary : Colors.gray 
               }]}>{item.phone}</Text>
+              {/* Hiển thị mã nhân viên phụ trách nếu có */}
+              {item.assignedEmployee && (
+                <Text style={[styles.assignedEmployee, { 
+                  color: isDarkMode ? Colors.darkGreen : Colors.darkGreen 
+                }]}>👨‍💼 NV: {item.assignedEmployee}</Text>
+              )}
             </View>
           </View>
           <View style={styles.cardActions}>
             <TouchableOpacity 
               onPress={() => handleEditCustomer(item)}
-              style={styles.actionButton}
+              style={[styles.actionButton, styles.editButton]}
+              activeOpacity={0.7}
             >
               <Ionicons name="create-outline" size={20} color={Colors.darkGreen} />
             </TouchableOpacity>
             <TouchableOpacity 
-              onPress={() => handleDeleteCustomer(item.id)}
-              style={styles.actionButton}
+              onPress={() => handleDeleteCustomer(item.id || item._id)}
+              style={[styles.actionButton, styles.deleteButton]}
+              activeOpacity={0.7}
             >
               <Ionicons name="trash-outline" size={20} color="#ef4444" />
             </TouchableOpacity>
@@ -221,9 +254,16 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
             <DataTable.Cell>
               <View style={styles.tableUserInfo}>
                 <Avatar.Image size={32} source={{ uri: customer.avatar }} />
-                <Text style={[styles.tableUserName, { 
-                  color: isDarkMode ? Colors.darkText : Colors.black 
-                }]}>{customer.fullName}</Text>
+                <View>
+                  <Text style={[styles.tableUserName, { 
+                    color: isDarkMode ? Colors.darkText : Colors.black 
+                  }]}>{customer.fullName}</Text>
+                  {customer.assignedEmployee && (
+                    <Text style={[styles.tableAssignedEmployee, { 
+                      color: isDarkMode ? Colors.darkGreen : Colors.darkGreen 
+                    }]}>NV: {customer.assignedEmployee}</Text>
+                  )}
+                </View>
               </View>
             </DataTable.Cell>
             <DataTable.Cell>
@@ -247,12 +287,14 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
                 <TouchableOpacity 
                   onPress={() => handleEditCustomer(customer)}
                   style={[styles.tableActionButton, { backgroundColor: Colors.darkGreen + '20' }]}
+                  activeOpacity={0.7}
                 >
                   <Ionicons name="create-outline" size={16} color={Colors.darkGreen} />
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  onPress={() => handleDeleteCustomer(customer.id)}
+                  onPress={() => handleDeleteCustomer(customer.id || customer._id)}
                   style={[styles.tableActionButton, { backgroundColor: '#ef444420' }]}
+                  activeOpacity={0.7}
                 >
                   <Ionicons name="trash-outline" size={16} color="#ef4444" />
                 </TouchableOpacity>
@@ -263,6 +305,18 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
       </DataTable>
     </View>
   );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center, { 
+        backgroundColor: isDarkMode ? Colors.darkBackground : '#f9fafb' 
+      }]}>
+        <Text style={{ color: isDarkMode ? Colors.darkText : Colors.black }}>
+          Đang tải danh sách khách hàng...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { 
@@ -278,7 +332,10 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
         }]}>Quản Lý Khách Hàng</Text>
         <Text style={[styles.headerSubtitle, { 
           color: isDarkMode ? Colors.darkSecondary : Colors.gray 
-        }]}>Tổng: {filteredCustomers.length} khách hàng</Text>
+        }]}>
+          Tổng: {filteredCustomers.length} khách hàng
+          {userRole === 'nhanvien' && ' (được phân công)'}
+        </Text>
       </View>
 
       {/* Search Bar */}
@@ -309,7 +366,7 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
         )}
       </View>
 
-      {/* Floating Action Button */}
+      {/* FAB */}
       <FAB
         style={[styles.fab, { backgroundColor: Colors.darkGreen }]}
         icon="plus"
@@ -317,7 +374,7 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
         color="white"
       />
 
-      {/* Add/Edit Customer Modal */}
+      {/* Customer Form Modal */}
       {showAddModal && (
         <CustomerFormModal
           visible={showAddModal}
@@ -325,23 +382,11 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
           isDarkMode={isDarkMode}
           onClose={() => setShowAddModal(false)}
           onSave={(customerData) => {
-            if (selectedCustomer) {
-              // Update existing customer
-              setCustomers(prev => 
-                prev.map(c => c.id === selectedCustomer.id ? { ...c, ...customerData } : c)
-              );
-            } else {
-              // Add new customer
-              const newCustomer = {
-                id: Date.now().toString(),
-                ...customerData,
-                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(customerData.fullName)}&background=random`,
-                joinDate: new Date().toLocaleDateString('vi-VN'),
-                status: 'active'
-              };
-              setCustomers(prev => [newCustomer, ...prev]);
-            }
+            // Handle save customer logic
+            console.log('Save customer data:', customerData);
             setShowAddModal(false);
+            // Refresh customer list after save
+            loadCustomers();
           }}
         />
       )}
@@ -352,6 +397,10 @@ export default function CustomersScreen({ isDarkMode, userRole = 'business' }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  center: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     padding: 16,
@@ -408,13 +457,33 @@ const styles = StyleSheet.create({
   },
   customerPhone: {
     fontSize: 14,
+    marginBottom: 2,
+  },
+  assignedEmployee: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   cardActions: {
     flexDirection: 'row',
     gap: 8,
+    zIndex: 1000,
+    pointerEvents: 'box-none',
   },
   actionButton: {
-    padding: 8,
+    padding: 12,
+    borderRadius: 8,
+    marginLeft: 4,
+    minWidth: 40,
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1001,
+  },
+  editButton: {
+    backgroundColor: Colors.darkGreen + '15',
+  },
+  deleteButton: {
+    backgroundColor: '#ef444415',
   },
   customerMeta: {
     marginTop: 12,
@@ -446,12 +515,20 @@ const styles = StyleSheet.create({
   tableUserName: {
     fontWeight: '500',
   },
+  tableAssignedEmployee: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
   tableActions: {
     flexDirection: 'row',
     gap: 4,
   },
   tableActionButton: {
-    padding: 6,
+    padding: 8,
     borderRadius: 6,
+    minWidth: 32,
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
