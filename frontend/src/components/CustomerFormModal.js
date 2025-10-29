@@ -552,7 +552,7 @@ export default function CustomerFormModal({
             </Card.Content>
           </Card>
 
-          {/* Thông tin thể chất */}
+          Thông tin thể chất
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
             borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'

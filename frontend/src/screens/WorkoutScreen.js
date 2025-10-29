@@ -340,9 +340,12 @@ const handleCategorySave = async () => {
     }
   };
 
-  // Check if user can manage categories (chỉ business user được thêm/sửa/xóa)
+  // Check if user can manage categories (business user và personal user thuần túy được thêm/sửa/xóa)
   const canManageCategories = () => {
-    return userData && userData.loai_tai_khoan === 'business';
+    return userData && (
+      userData.loai_tai_khoan === 'business' || 
+      (userData.loai_tai_khoan === 'personal' && !userData.additional_info?.vai_tro)
+    );
   };
 
   // Filter workouts by selected category
@@ -566,7 +569,6 @@ const handleCategorySave = async () => {
           )}
         </View>
 
-        /* Branch Workouts | Bài tập chi nhánh - Hiển thị cho Employee và Customer */
         {(isEmployee || isCustomer) && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -630,8 +632,9 @@ const handleCategorySave = async () => {
         )}
       </ScrollView>
       
-      {/* Category Form Modal - Chỉ business user mới có modal này */}
-      {userData?.loai_tai_khoan === 'business' && (
+      {/* Category Form Modal - Business user và Personal user thuần túy có modal này */}
+      {(userData?.loai_tai_khoan === 'business' || 
+        (userData?.loai_tai_khoan === 'personal' && !userData?.additional_info?.vai_tro)) && (
         <CategoryFormModal
           visible={showCategoryModal}
           onClose={() => setShowCategoryModal(false)}
@@ -639,7 +642,7 @@ const handleCategorySave = async () => {
           editCategory={editingCategory}
           isDarkMode={isDarkMode}
           chinhanhID={userData?.additional_info?.chinhanhID || userData?.chinhanhID}
-          userID={null}
+          userID={userData?.loai_tai_khoan === 'personal' ? userData?._id : null}
         />
       )}
     </TouchableOpacity>

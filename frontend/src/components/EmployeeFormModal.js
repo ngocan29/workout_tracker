@@ -304,7 +304,7 @@ export default function EmployeeFormModal({ visible, employee, isDarkMode, onClo
             </Card.Content>
           </Card>
 
-          {/* Thông tin thể chất (read-only) */}
+          Thông tin thể chất (read-only)
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
             borderColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
