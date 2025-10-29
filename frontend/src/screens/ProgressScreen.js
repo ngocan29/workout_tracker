@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  StyleSheet, 
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { Card, Title, Button } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Navbar from '../components/ui/Navbar';
 import { Colors } from '../constants/Colors';
+import { API_CONFIG } from '../constants/api';
 
 export default function ProgressScreen({ isDarkMode, setDarkMode }) {
   const [showBodyMeasurementModal, setShowBodyMeasurementModal] = useState(false);
@@ -29,6 +21,7 @@ export default function ProgressScreen({ isDarkMode, setDarkMode }) {
   useEffect(() => {
     checkBodyMeasurementData();
     loadStatistics();
+    fetchBodyMeasurements();
   }, []);
 
   const loadStatistics = async () => {
@@ -129,24 +122,81 @@ export default function ProgressScreen({ isDarkMode, setDarkMode }) {
     }
   };
 
+  //luu so do co the vao db
   const handleSaveBodyMeasurements = async (measurements) => {
     try {
-      const currentDate = new Date().toISOString();
-      await AsyncStorage.setItem('bodyMeasurementData', JSON.stringify(measurements));
-      await AsyncStorage.setItem('bodyMeasurementLastUpdate', currentDate);
-      
-      setBodyMeasurements(measurements);
-      setShowBodyMeasurementModal(false);
-      
-      Alert.alert(
-        'Thành công', 
-        isFirstTimeOrNewMonth ? 'Đã cập nhật số đo cơ thể cho tháng mới!' : 'Đã lưu số đo cơ thể!'
-      );
+      const userId = await AsyncStorage.getItem('userId');
+      if (!userId) {
+        Alert.alert('Lỗi', 'Không tìm thấy userId. Vui lòng đăng nhập lại.');
+        return;
+      }
+
+      const bophanData = measurements.map(m => ({
+        ten: m.name,
+        sodo: parseFloat(m.value),
+        sodothangtruoc: 0,
+      }));
+
+      const payload = {
+        userID: userId,
+        bophan: bophanData,
+        ngaytao: new Date(),
+      };
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}/sodocothe/user/${userId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      console.log('✅ Đã lưu số đo cơ thể:', result);
+
+      if (response.ok) {
+        Alert.alert('Thành công', 'Đã lưu số đo cơ thể!');
+        setShowBodyMeasurementModal(false);
+        await fetchBodyMeasurements(); //dung ham goi api update du lieu tu db
+      } else {
+        throw new Error(result.error || 'Lỗi không xác định');
+      }
     } catch (error) {
-      console.error('Error saving body measurements:', error);
-      Alert.alert('Lỗi', 'Có lỗi xảy ra khi lưu dữ liệu');
+      console.error('❌ Lỗi lưu số đo:', error);
+      Alert.alert('Lỗi', 'Không thể lưu số đo cơ thể.');
     }
   };
+  
+
+  const fetchBodyMeasurements = async () => {
+    try {
+      const userId = await AsyncStorage.getItem('userId');
+      if (!userId) {
+        console.log('Chưa có userId');
+        return;
+      }
+
+      // Gọi API lấy số đo cơ thể theo user
+      const response = await fetch(`${API_CONFIG.BASE_URL}/sodocothe/user/${userId}`);
+      const data = await response.json();
+
+      if (Array.isArray(data) && data.length > 0) {
+        // Giả sử backend trả danh sách, ta lấy bản mới nhất
+        const latest = data[0];
+
+        // Cập nhật state
+        setBodyMeasurements(latest.bophan || []);
+
+        // Lưu vào AsyncStorage nếu cần
+        await AsyncStorage.setItem('bodyMeasurementData', JSON.stringify(latest.bophan));
+
+        console.log('✅ Đã tải số đo mới nhất:', latest.bophan);
+      } else {
+        console.log('Không có dữ liệu số đo từ API');
+      }
+    } catch (error) {
+      console.error('❌ Lỗi khi tải số đo cơ thể:', error);
+    }
+  };
+
 
   // Get current measurements to display
   const getCurrentMeasurements = () => {
@@ -161,6 +211,78 @@ export default function ProgressScreen({ isDarkMode, setDarkMode }) {
       { name: "Vòng Tay", value: "32", change: "+1cm", color: "#3b82f6" },
     ];
   };
+
+  const [weight, setWeight] = useState(null);
+
+  //lay can nang tu NutritionScreen hien thi ra
+  useEffect(() => {
+    const loadWeight = async () => {
+      try {
+        //Lấy dữ liệu từ AsyncStorage (đã lưu trong NutritionScreen)
+        const dataStr = await AsyncStorage.getItem('nutritionData');
+
+        if (dataStr) {
+          const data = JSON.parse(dataStr);
+          //Lấy giá trị cân nặng ra
+          setWeight(data.weight);
+          console.log('Cân nặng hiện tại:', data.weight);
+        } else {
+          console.log('Chưa có dữ liệu cân nặng');
+        }
+      } catch (error) {
+        console.error('Lỗi khi lấy cân nặng:', error);
+      }
+    };
+
+    loadWeight();
+  }, []);
+
+  const [nutrition, setNutrition] = useState({
+    chieucao: 0,
+    cannang: 0,
+    bmi: 0,
+    lbm: 0,
+    luongnuoc: 0,
+    calo: 0,
+  });
+
+  useEffect(() => {
+    const fetchNutrition = async () => {
+      try {
+        //Lấy userId từ AsyncStorage (nếu bạn đã lưu khi đăng nhập)
+        const userId = await AsyncStorage.getItem('userId');
+
+        //Nếu chưa có userId, dừng lại
+        if (!userId) {
+          console.log('Chưa có userId trong AsyncStorage');
+          return;
+        }
+
+        //Gọi API backend
+        const response = await fetch(`http://192.168.1.19:5000/dinhduong/user/${userId}`);
+        const data = await response.json();
+        console.log("Dữ liệu nhận được:", data);
+
+        //Lấy bản ghi mới nhất (vì server sort theo ngaytao)
+        if (Array.isArray(data) && data.length > 0) {
+          setNutrition(data[0]);
+        } else {
+          console.log('Không có dữ liệu dinh dưỡng');
+        }
+      } catch (error) {
+        console.error('Lỗi khi lấy dữ liệu dinh dưỡng:', error);
+      }
+    };
+
+    fetchNutrition();
+  }, []);
+
+  if (!nutrition) {
+    <View>
+      return <Text style={styles.loading}>Đang tải dữ liệu...</Text>;
+    </View>
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.background }]}>
       <Navbar isDarkMode={isDarkMode} setIsDarkMode={setDarkMode} />
@@ -174,18 +296,31 @@ export default function ProgressScreen({ isDarkMode, setDarkMode }) {
               <View style={styles.overviewItem}>
                 <Text style={styles.emoji}>📈</Text>
                 <Text style={styles.statTitle}>Cân Nặng Hiện Tại</Text>
-                <Text style={[styles.statValue, { color: '#10b981' }]}>68.5kg</Text>
+                <Text style={[styles.statValue, { color: '#10b981' }]}>{nutrition.cannang} kg</Text>
                 <Text style={styles.statChange}>-2.3kg từ tháng trước</Text>
               </View>
               <View style={styles.overviewItem}>
                 <Text style={styles.emoji}>💪</Text>
                 <Text style={styles.statTitle}>Khối Lượng Cơ</Text>
-                <Text style={[styles.statValue, { color: '#3b82f6' }]}>45.2kg</Text>
+                <Text style={[styles.statValue, { color: '#3b82f6' }]}>{nutrition?.lbm?.toFixed(2)}</Text>
                 <Text style={styles.statChange}>+1.1kg từ tháng trước</Text>
               </View>
             </View>
           </Card.Content>
         </Card>
+
+        {/*         Thông tin Dinh Dưỡng
+      <Text>Chiều cao:             {nutrition.chieucao} cm
+      <Text>Cân nặng:              {nutrition.cannang} kg
+      <Text>BMI:                   {nutrition.bmi?.toFixed(2)}
+      <Text>LBM (Khối lượng cơ):   {nutrition.lbm?.toFixed(2)} kg
+      <Text>Lượng nước cần:        {nutrition.luongnuoc} L
+      <Text>Calo:                  {nutrition.calo} kcal
+      <Text>Protein:               {nutrition.protein}
+      <Text>Carbs:                 {nutrition.carbs} g
+      <Text>Fat:                   {nutrition.fat} g
+      <Text>Ngày tạo:              {new Date(nutrition.ngaytao).toLocaleDateString('vi-VN')}
+        */}
 
         {/* Body Measurements */}
         <View style={styles.section}>
@@ -240,42 +375,6 @@ export default function ProgressScreen({ isDarkMode, setDarkMode }) {
                   <Text style={styles.measurementValue}>{statistics.totalWorkoutTime} phút</Text>
                   <Text style={[styles.measurementChange, { color: '#10b981' }]}>
                     {statistics.totalWorkoutTime > 200 ? '+32 phút tuần này' : 'Hãy tập thêm!'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.measurementRow}>
-                <View style={styles.statLabelContainer}>
-                  <Text style={styles.statIcon}>💪</Text>
-                  <Text style={styles.measurementLabel}>Tổng số bài tập hoàn thành</Text>
-                </View>
-                <View style={styles.measurementValueContainer}>
-                  <Text style={styles.measurementValue}>{statistics.totalExercisesCompleted} bài</Text>
-                  <Text style={[styles.measurementChange, { color: '#3b82f6' }]}>
-                    {statistics.totalExercisesCompleted > 30 ? '+6 bài tuần này' : 'Tiếp tục nỗ lực!'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.measurementRow}>
-                <View style={styles.statLabelContainer}>
-                  <Text style={styles.statIcon}>🔥</Text>
-                  <Text style={styles.measurementLabel}>Chuỗi ngày tập liên tiếp</Text>
-                </View>
-                <View style={styles.measurementValueContainer}>
-                  <Text style={styles.measurementValue}>{statistics.currentStreak} ngày</Text>
-                  <Text style={[styles.measurementChange, { color: '#f59e0b' }]}>
-                    {statistics.currentStreak > 0 ? '🔥 Streak' : '💪 Bắt đầu'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.measurementRow}>
-                <View style={styles.statLabelContainer}>
-                  <Text style={styles.statIcon}>📊</Text>
-                  <Text style={styles.measurementLabel}>Trung bình/tuần</Text>
-                </View>
-                <View style={styles.measurementValueContainer}>
-                  <Text style={styles.measurementValue}>{statistics.weeklyAverage} buổi</Text>
-                  <Text style={[styles.measurementChange, { color: '#10b981' }]}>
-                    {statistics.weeklyAverage >= 3 ? '+0.8 buổi' : 'Cần cải thiện'}
                   </Text>
                 </View>
               </View>

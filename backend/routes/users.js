@@ -815,4 +815,45 @@ router.delete('/customer/:id', async (req, res) => {
   }
 });
 
+// PUT: Cập nhật chuỗi hoàn thành mục tiêu cho user
+router.put('/:id/streak', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('🔥 Updating streak for user:', id);
+    
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Không tìm thấy user' 
+      });
+    }
+    
+    // Tăng chuỗi lên 1
+    user.chuoi = (user.chuoi || 0) + 1;
+    await user.save();
+    
+    console.log('✅ Streak updated successfully:', user.chuoi);
+    
+    res.json({
+      success: true,
+      data: user,
+      message: `Chuỗi hoàn thành mục tiêu đã được cập nhật: ${user.chuoi} ngày`
+    });
+  } catch (err) {
+    console.error('❌ Error updating streak:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'ID user không hợp lệ' 
+      });
+    }
+    res.status(500).json({ 
+      success: false,
+      error: 'Lỗi server khi cập nhật chuỗi' 
+    });
+  }
+});
+
 module.exports = router;

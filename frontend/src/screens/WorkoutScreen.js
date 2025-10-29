@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, Alert, Platform} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Title, Button } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { MoreVertical, Edit, Trash2 } from 'react-native-feather';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Edit, MoreVertical, Trash2 } from 'react-native-feather';
+import { Button, Title } from 'react-native-paper';
+import CategoryFormModal from '../components/CategoryFormModal';
 import Navbar from '../components/ui/Navbar';
 import { Colors } from '../constants/Colors';
-import { WorkoutService, CategoryService } from '../services/api';
-import CategoryFormModal from '../components/CategoryFormModal';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CategoryService, WorkoutService } from '../services/api';
 
 export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
   const router = useRouter();

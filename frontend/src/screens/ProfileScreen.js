@@ -1,11 +1,17 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Platform, Modal } from 'react-native';
 import { Card, Title, Button, Avatar } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import Navbar from '../components/ui/Navbar';
 import { Colors } from '../constants/Colors';
 
 export default function ProfileScreen({ isDarkMode, setDarkMode, setCurrentScreen, userRole = 'khachhang', userData, branchData }) {
+  const router = useRouter();
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
   // Xác định role của user
   const isBusiness = userData?.loai_tai_khoan === 'business';
   const isPersonal = userData?.loai_tai_khoan === 'personal' && (!userData?.additional_info?.vai_tro || userData?.additional_info?.vai_tro === 'canhan');
@@ -20,11 +26,9 @@ export default function ProfileScreen({ isDarkMode, setDarkMode, setCurrentScree
     if (isBusiness) return "Công ty/Tập đoàn";
     if (isPersonal) return "Tài khoản cá nhân";
     if (isKhachHang) {
-      const companyName = branchData?.ten_chi_nhanh || userData?.company_name || "công ty";
       return `Khách hàng công ty`;
     }
     if (isNhanVien) {
-      const companyName = branchData?.ten_chi_nhanh || userData?.company_name || "công ty";
       return `Nhân viên công ty`;
     }
     return "Tài khoản cá nhân";
@@ -59,9 +63,53 @@ export default function ProfileScreen({ isDarkMode, setDarkMode, setCurrentScree
 
   const menuItems = getMenuItems();
 
-  const handleLogout = () => {
-    // TODO: replace with real logout logic (clear tokens, navigate, etc.)
-    setCurrentScreen('login');
+  const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      const confirmLogout = window.confirm('Bạn có chắc chắn muốn đăng xuất không?');
+      if (confirmLogout) {
+        await performLogout();
+      }
+    } else {
+      Alert.alert(
+        'Xác nhận đăng xuất',
+        'Bạn có chắc chắn muốn đăng xuất không?',
+        [
+          {
+            text: 'Hủy',
+            style: 'cancel',
+          },
+          {
+            text: 'Đăng xuất',
+            style: 'destructive',
+            onPress: performLogout,
+          },
+        ]
+      );
+    }
+  };
+
+  const performLogout = async () => {
+    try {
+      // Clear stored user data
+      await AsyncStorage.multiRemove(['userData', 'accessToken', 'userId']);
+      
+      // Navigate to login screen
+      if (setCurrentScreen) {
+        setCurrentScreen('login');
+      } else {
+        router.replace('/');
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
+  const handleShowTerms = () => {
+    setShowTermsModal(true);
+  };
+
+  const handleShowPrivacy = () => {
+    setShowPrivacyModal(true);
   };
 
   return (
@@ -130,7 +178,7 @@ export default function ProfileScreen({ isDarkMode, setDarkMode, setCurrentScree
                 <Button
                   mode="outlined"
                   compact
-                  onPress={() => setCurrentScreen('terms')}
+                  onPress={handleShowTerms}
                   style={{ borderRadius: 20, marginHorizontal: 6 }}
                   labelStyle={{ fontSize: 13 }}
                 >
@@ -139,20 +187,11 @@ export default function ProfileScreen({ isDarkMode, setDarkMode, setCurrentScree
                 <Button
                   mode="outlined"
                   compact
-                  onPress={() => setCurrentScreen('privacy')}
+                  onPress={handleShowPrivacy}
                   style={{ borderRadius: 20, marginHorizontal: 6 }}
                   labelStyle={{ fontSize: 13 }}
                 >
                   Bảo Mật
-                </Button>
-                <Button
-                  mode="outlined"
-                  compact
-                  onPress={() => setCurrentScreen('support')}
-                  style={{ borderRadius: 20, marginHorizontal: 6 }}
-                  labelStyle={{ fontSize: 13 }}
-                >
-                  Hỗ Trợ
                 </Button>
               </View>
 
@@ -171,6 +210,110 @@ export default function ProfileScreen({ isDarkMode, setDarkMode, setCurrentScree
           </Card>
         </View>
       </ScrollView>
+
+      {/* Terms Modal */}
+      <Modal
+        visible={showTermsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTermsModal(false)}
+      >
+        <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? Colors.darkBackground : '#f9fafb' }]}>
+          <View style={[styles.modalHeader, { 
+            backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
+            borderBottomColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
+          }]}>
+            <TouchableOpacity onPress={() => setShowTermsModal(false)}>
+              <Ionicons name="close" size={24} color={isDarkMode ? Colors.darkText : Colors.black} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+              Điều Khoản Sử Dụng
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+          
+          <ScrollView style={styles.modalContent}>
+            <Text style={[styles.modalText, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+              <Text style={styles.modalSectionTitle}>1. Chấp nhận các điều khoản{'\n'}</Text>
+              Bằng cách sử dụng ứng dụng FitTracker Pro, bạn đồng ý tuân thủ và bị ràng buộc bởi các điều khoản và điều kiện sử dụng này.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>2. Mô tả dịch vụ{'\n'}</Text>
+              FitTracker Pro là một ứng dụng theo dõi sức khỏe và thể dục, cung cấp các tính năng như theo dõi bài tập, dinh dưỡng, và quản lý mục tiêu cá nhân.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>3. Quyền riêng tư và dữ liệu{'\n'}</Text>
+              Chúng tôi cam kết bảo vệ thông tin cá nhân của bạn. Tất cả dữ liệu sẽ được xử lý theo chính sách bảo mật của chúng tôi.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>4. Trách nhiệm người dùng{'\n'}</Text>
+              Bạn có trách nhiệm duy trì tính bảo mật của tài khoản và chịu trách nhiệm về tất cả các hoạt động diễn ra dưới tài khoản của bạn.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>5. Hạn chế trách nhiệm{'\n'}</Text>
+              FitTracker Pro không chịu trách nhiệm về bất kỳ tổn thất hoặc thiệt hại nào phát sinh từ việc sử dụng ứng dụng.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>6. Thay đổi điều khoản{'\n'}</Text>
+              Chúng tôi có quyền thay đổi các điều khoản này bất cứ lúc nào. Các thay đổi sẽ có hiệu lực ngay khi được đăng tải.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>7. Liên hệ{'\n'}</Text>
+              Nếu bạn có bất kỳ câu hỏi nào về các điều khoản này, vui lòng liên hệ với chúng tôi qua email: thientuyet1192005@gmail.com
+            </Text>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Privacy Modal */}
+      <Modal
+        visible={showPrivacyModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPrivacyModal(false)}
+      >
+        <View style={[styles.modalContainer, { backgroundColor: isDarkMode ? Colors.darkBackground : '#f9fafb' }]}>
+          <View style={[styles.modalHeader, { 
+            backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
+            borderBottomColor: isDarkMode ? Colors.darkBackground : '#e5e7eb'
+          }]}>
+            <TouchableOpacity onPress={() => setShowPrivacyModal(false)}>
+              <Ionicons name="close" size={24} color={isDarkMode ? Colors.darkText : Colors.black} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+              Chính Sách Bảo Mật
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+          
+          <ScrollView style={styles.modalContent}>
+            <Text style={[styles.modalText, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+              <Text style={styles.modalSectionTitle}>1. Thu thập thông tin{'\n'}</Text>
+              Chúng tôi thu thập thông tin cá nhân như tên, email, thông tin sức khỏe để cung cấp dịch vụ tốt nhất cho bạn.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>2. Sử dụng thông tin{'\n'}</Text>
+              Thông tin của bạn được sử dụng để:{'\n'}
+              • Cung cấp và cải thiện dịch vụ{'\n'}
+              • Gửi thông báo quan trọng{'\n'}
+              • Phân tích và tối ưu hóa ứng dụng{'\n'}
+              • Hỗ trợ khách hàng{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>3. Chia sẻ thông tin{'\n'}</Text>
+              Chúng tôi không bán, trao đổi, hoặc chuyển giao thông tin cá nhân của bạn cho bên thứ ba mà không có sự đồng ý của bạn.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>4. Bảo mật dữ liệu{'\n'}</Text>
+              Chúng tôi áp dụng các biện pháp bảo mật phù hợp để bảo vệ thông tin cá nhân của bạn khỏi truy cập, thay đổi, tiết lộ hoặc phá hủy trái phép.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>5. Quyền của người dùng nếu được cấp{'\n'}</Text>
+              Bạn có quyền:{'\n'}
+              • Truy cập và cập nhật thông tin cá nhân{'\n'}
+              • Yêu cầu xóa dữ liệu{'\n'}
+              • Từ chối thu thập dữ liệu{'\n'}
+              • Khiếu nại về việc xử lý dữ liệu{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>6. Thay đổi chính sách{'\n'}</Text>
+              Chính sách bảo mật này có thể được cập nhật định kỳ. Chúng tôi sẽ thông báo về các thay đổi quan trọng.{'\n\n'}
+              
+              <Text style={styles.modalSectionTitle}>7. Liên hệ{'\n'}</Text>
+              Nếu bạn có câu hỏi về chính sách bảo mật, liên hệ: thientuyet1192005@gmail.com
+            </Text>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -205,4 +348,32 @@ const styles = StyleSheet.create({
   logoutCard: { margin: 16, borderRadius: 12 },
   logoutButton: { padding: 16, alignItems: 'center' },
   logoutText: { color: '#ef4444', fontWeight: 'bold', fontSize: 16 },
+  
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  modalText: {
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  modalSectionTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });

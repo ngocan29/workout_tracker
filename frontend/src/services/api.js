@@ -251,10 +251,16 @@ export const CategoryService = {
 
 // Nutrition Service - API cho dinh dưỡng
 export const NutritionService = {
-  // Lấy thông tin dinh dưỡng của khách hàng (mới nhất)
+  // Lấy tất cả thông tin dinh dưỡng
+  getAllNutritionData: async () => {
+    console.log('🍎 Fetching all nutrition data');
+    return await apiCall('/dinhduong', 'GET');
+  },
+
+  // Lấy thông tin dinh dưỡng của user cụ thể (mới nhất)
   getNutritionData: async (userID) => {
     console.log('🍎 Fetching nutrition data for user:', userID);
-    return await apiCall(`/dinhduong?userID=${userID}`, 'GET');
+    return await apiCall(`/dinhduong/user/${userID}`, 'GET');
   },
 
   // Tạo thông tin dinh dưỡng mới (lần đầu tiên)

@@ -1,34 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Modal,
-  TextInput,
-  Alert,
-} from 'react-native';
-import { Card, Title, Paragraph } from 'react-native-paper';
-import ProgressCircle from 'react-native-progress/Circle';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import Navbar from '../components/ui/Navbar';
-import { Colors } from '../constants/Colors';
-import { getCustomersByBranch, getCustomersByEmployee } from '../services/customerApi';
-import { getEmployeesByBranch } from '../services/employeeApi';
-import { createGoal, getTodayGoal, getTotalWorkoutTime } from '../services/goalApi';
-import { WorkoutService } from '../services/api';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Card, Paragraph, Title } from 'react-native-paper';
+import ProgressCircle from 'react-native-progress/Circle';
 import CustomerFormModal from '../components/CustomerFormModal';
 import EmployeeFormModal from '../components/EmployeeFormModal.js';
+import Navbar from '../components/ui/Navbar';
+import { Colors } from '../constants/Colors';
+import { WorkoutService } from '../services/api';
+import { getCustomersByBranch, getCustomersByEmployee } from '../services/customerApi';
+import { getEmployeesByBranch } from '../services/employeeApi';
+import { createGoal, getTodayGoal, getTotalWorkoutTime, updateUserStreak } from '../services/goalApi';
 
 export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userData }) {
   const router = useRouter();
   
-  // Hiển thị tên user và thông tin chi nhánh
+  // Hiển thị tên user
   const userName = userData?.ho_ten || userData?.name || "User";
-  const branchName = branchData?.ten_chi_nhanh || branchData?.name || "Chi nhánh";
   
   // Xác định role của user với safe access
   const isBusiness = userData?.loai_tai_khoan === 'business';
@@ -38,7 +37,6 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [dailyGoal, setDailyGoal] = useState('');
   const [goalHistory, setGoalHistory] = useState([]);
-  const [currentStreak, setCurrentStreak] = useState(0);
   
   // State để lưu số lượng thực tế
   const [customerCount, setCustomerCount] = useState(0);
@@ -54,6 +52,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
   const [todayGoalData, setTodayGoalData] = useState(null);
   const [totalWorkoutTime, setTotalWorkoutTime] = useState(0);
   const [goalProgress, setGoalProgress] = useState(0);
+  const [streakUpdatedToday, setStreakUpdatedToday] = useState(false);
 
   // Load số lượng khách hàng và nhân viên thực tế
   const loadRealData = useCallback(async () => {
@@ -115,11 +114,40 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
       if (todayGoalData && todayGoalData.muctieu) {
         const progress = Math.min(totalTime / parseInt(todayGoalData.muctieu), 1);
         setGoalProgress(progress);
+        
+        // Kiểm tra nếu đã hoàn thành mục tiêu và chưa cập nhật streak hôm nay
+        if (totalTime >= parseInt(todayGoalData.muctieu) && !streakUpdatedToday) {
+          console.log('🎉 Goal completed! Updating streak...');
+          try {
+            const result = await updateUserStreak(userData._id);
+            if (result.success) {
+              console.log('✅ Streak updated:', result.message);
+              setStreakUpdatedToday(true);
+              
+              // Lưu thông tin đã cập nhật streak hôm nay
+              const today = new Date().toDateString();
+              await AsyncStorage.setItem('lastStreakUpdate', today);
+              
+              // Cập nhật userData trong AsyncStorage để phản ánh chuỗi mới
+              const updatedUserData = { ...userData, chuoi: result.data.chuoi };
+              await AsyncStorage.setItem('userData', JSON.stringify(updatedUserData));
+              
+              // Hiển thị thông báo chúc mừng
+              Alert.alert(
+                '🎉 Chúc mừng!',
+                `Bạn đã hoàn thành mục tiêu ${todayGoalData.muctieu} phút hôm nay!\nChuỗi hoàn thành: ${result.data.chuoi} ngày 🔥`,
+                [{ text: 'Tuyệt vời!', style: 'default' }]
+              );
+            }
+          } catch (error) {
+            console.error('❌ Error updating streak:', error);
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading workout progress:', error);
     }
-  }, [userData, todayGoalData]);
+  }, [userData, todayGoalData, streakUpdatedToday]);
 
   const data = userData?.loai_tai_khoan === 'business' 
     ? [
@@ -135,8 +163,6 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
       ]
     : [
         { value: dataLoaded ? workoutCount : 0, label: "Số Bài Tập" },
-        { value: 420, label: "Calo đốt" },
-        { value: 40, label: "Điểm Thưởng" },
       ];
 
   const checkTodayGoal = useCallback(async () => {
@@ -199,17 +225,6 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
       }
       
       setGoalHistory(history);
-      
-      // Calculate current streak
-      let streak = 0;
-      for (let i = history.length - 2; i >= 0; i--) { // Start from yesterday
-        if (history[i].achieved) {
-          streak++;
-        } else {
-          break;
-        }
-      }
-      setCurrentStreak(streak);
       
     } catch (error) {
       console.error('Error loading goal history:', error);
@@ -284,6 +299,23 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
       loadWorkoutProgress();
     }
   }, [todayGoalData, userData, loadWorkoutProgress]);
+
+  useEffect(() => {
+    // Kiểm tra xem đã cập nhật streak hôm nay chưa
+    const checkStreakUpdated = async () => {
+      try {
+        const today = new Date().toDateString();
+        const lastStreakUpdate = await AsyncStorage.getItem('lastStreakUpdate');
+        setStreakUpdatedToday(lastStreakUpdate === today);
+      } catch (error) {
+        console.error('Error checking streak update status:', error);
+      }
+    };
+    
+    if (userData) {
+      checkStreakUpdated();
+    }
+  }, [userData]);
 
   // Handlers cho các actions
   const handleStartWorkout = () => {
@@ -370,7 +402,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
             <View style={styles.streakItem}>
               <Ionicons name="flame" size={24} color="#FF6B35" />
               <Text style={[styles.streakText, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
-                Chuỗi: {currentStreak} ngày
+                Chuỗi: {userData?.chuoi || 0} ngày
               </Text>
             </View>
           </View>
@@ -422,7 +454,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
         {/* Hero Section */}
         <Card style={[styles.heroCard, { backgroundColor: '#667eea' }]}>
           <Card.Content>
-            <Title style={styles.heroTitle}>Chào {userData?.ten}! 👋</Title>
+            <Title style={styles.heroTitle}>Chào {userName}! 👋</Title>
             <Paragraph style={styles.heroText}>
               Hãy bắt đầu hành trình của bạn ngay hôm nay!
             </Paragraph>
@@ -523,7 +555,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
                 <View style={styles.progressContent}>
                   <View style={styles.streakDisplay}>
                     <Ionicons name="flame" size={40} color="#FF6B35" />
-                    <Text style={styles.streakNumber}>{currentStreak}</Text>
+                    <Text style={styles.streakNumber}>{userData?.chuoi || 0}</Text>
                   </View>
                   <View style={styles.progressText}>
                     <Text style={styles.progressLabel}>Chuỗi Ngày</Text>
@@ -915,5 +947,57 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Nutrition styles
+  nutritionCard: {
+    borderRadius: 12,
+    elevation: 2,
+    marginBottom: 12,
+  },
+  nutritionGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  nutritionItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  nutritionValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  nutritionLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  nutritionDetails: {
+    marginTop: 8,
+  },
+  nutritionDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  nutritionDetailLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  nutritionDetailValue: {
+    fontSize: 14,
+  },
+  nutritionButton: {
+    backgroundColor: '#667eea',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  nutritionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

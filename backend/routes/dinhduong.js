@@ -3,51 +3,47 @@ const router = express.Router();
 const Dinhduong = require('../models/DinhDuong');
 const User = require('../models/User');
 
-// GET: Lấy dinh dưỡng - tất cả hoặc theo userID
+// GET: Lấy tất cả data dinh dưỡng (sắp xếp từ mới nhất)
 router.get('/', async (req, res) => {
   try {
-    console.log('🔍 GET /dinhduong called with query:', req.query);
+    console.log('🔍 GET /dinhduong - Getting all nutrition data');
     
-    const { userID, all } = req.query;
+    const dinhduong = await Dinhduong.find({})
+      .sort({ ngaytao: -1 })
+      .populate('userID', 'ten email gioitinh'); // Populate thông tin user
     
-    let query = {};
-    let options = {};
-    
-    if (userID) {
-      // Lấy theo userID cụ thể
-      query.userID = userID;
-      console.log('📋 Query with userID:', query);
-    }
-    
-    if (all === 'true') {
-      // Lấy tất cả data, sắp xếp từ mới nhất
-      options.sort = { ngaytao: -1 };
-      console.log('📊 Getting all records');
-    } else if (!userID) {
-      // Nếu không có userID và không có all=true, lấy 1 record mới nhất
-      options.sort = { ngaytao: -1 };
-      options.limit = 1;
-      console.log('📊 Getting latest 1 record (no userID)');
-    } else {
-      // Có userID nhưng không có all=true, lấy record mới nhất của user đó
-      options.sort = { ngaytao: -1 };
-      options.limit = 1;
-      console.log('📊 Getting latest 1 record for userID');
-    }
-    
-    console.log('🔍 Final query:', query, 'options:', options);
-    
-    const dinhduong = await Dinhduong.find(query, null, options);
     console.log('✅ Found records:', dinhduong.length);
-    
-    // Nếu limit = 1, trả về object thay vì array
-    if (options.limit === 1) {
-      res.json(dinhduong[0] || null);
-    } else {
-      res.json(dinhduong);
-    }
+    res.json(dinhduong);
   } catch (err) {
-    console.error('❌ GET error:', err.message);
+    console.error('❌ GET all error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET: Lấy data dinh dưỡng theo userID (mới nhất)
+router.get('/user/:userID', async (req, res) => {
+  try {
+    const { userID } = req.params;
+    console.log('� GET /dinhduong/user/' + userID);
+    
+    // Kiểm tra user có tồn tại không
+    const user = await User.findById(userID);
+    if (!user) {
+      return res.status(404).json({ error: 'Không tìm thấy user' });
+    }
+    
+    // Lấy data dinh dưỡng mới nhất của user
+    const dinhduong = await Dinhduong.findOne({ userID })
+      .sort({ ngaytao: -1 });
+    
+    if (!dinhduong) {
+      return res.status(404).json({ error: 'Chưa có dữ liệu dinh dưỡng cho user này' });
+    }
+    
+    console.log('✅ Found nutrition data for user:', user.ten);
+    res.json(dinhduong);
+  } catch (err) {
+    console.error('❌ GET user nutrition error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
