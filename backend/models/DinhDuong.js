@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const User = require('./User');
 
 const dinhduongSchema = new mongoose.Schema({
-  khachhangUserID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   chieucao: { type: Number, required: true },
   cannang: { type: Number, required: true },

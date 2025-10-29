@@ -1,92 +1,207 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, Alert, Platform} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback } from 'react';
 import { Title, Button } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MoreVertical, Edit, Trash2 } from 'react-native-feather';
 import { useRouter } from 'expo-router';
 import Navbar from '../components/ui/Navbar';
 import { Colors } from '../constants/Colors';
-import { WorkoutService } from '../services/api';
+import { WorkoutService, CategoryService } from '../services/api';
+import CategoryFormModal from '../components/CategoryFormModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
   const router = useRouter();
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [activeCategoryDropdown, setActiveCategoryDropdown] = useState(null);
   const [workouts, setWorkouts] = useState([]);
+  const [branchWorkouts, setBranchWorkouts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [userData, setUserData] = useState(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingBranch, setLoadingBranch] = useState(false);
 
-  //Đưa ra ngoài để có thể gọi lại ở nhiều nơi
-const fetchWorkouts = async () => {
-  try {
-    const response = await WorkoutService.getWorkouts();
-    const rawData = response.data || response;
-    const formatted = rawData.map(item => ({
-      id: item._id,
-      name: item.ten || 'Không có tên',
-      duration: item.thoigiangoc ? `${item.thoigiangoc} phút` : 'Chưa rõ',
-      calories: item.calotieuthukhoiluong || 0,
-      completed: item.trangthai === 'hoanthanh',
-      image: item.anhminhhoa || 'https://via.placeholder.com/300x200/ccc/000?text=No+Image'
-    }));
-    setWorkouts(formatted);
-  } catch (error) {
-    console.error("Lỗi khi tải danh sách bài tập:", error);
-  }
-};
+  // Check user type
+  const isPersonal = userData?.loai_tai_khoan === 'personal';
+  const isBusiness = userData?.loai_tai_khoan === 'business';
+  const isEmployee = userData?.loai_tai_khoan === 'personal' && userData?.additional_info?.vai_tro === 'nhanvien';
+
+  // Fetch workouts của user hiện tại
+  const fetchWorkouts = async () => {
+    try {
+      setLoading(true);
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const user = JSON.parse(userData);
+        console.log('Fetching workouts for userID:', user._id);
+        const response = await WorkoutService.getWorkouts(user._id);
+        console.log('User workouts response:', response);
+        if (response.success) {
+          const formatted = response.data.map(item => ({
+            id: item._id,
+            name: item.ten || 'Không có tên',
+            duration: item.thoigiangoc ? `${item.thoigiangoc} phút` : 'Chưa rõ',
+            category: item.danhmuc?.ten || item.danhmucID?.ten || 'Không có danh mục',
+            categoryId: item.danhmucID?._id || item.danhmucID || null,
+            calories: item.calo || item.calories || 0,
+            completed: item.trangthai === 'hoanthanh',
+            image: item.anhminhhoa || 'https://via.placeholder.com/300x200/ccc/000?text=No+Image',
+            // Full data for edit mode
+            description: item.mota || '',
+            steps: item.cacbuoc || [''],
+            benefits: item.loiich || [''],
+            danhmucID: item.danhmucID?._id || item.danhmucID || '',
+            rawDuration: item.thoigiangoc || 30,
+            hengiomoinghay: item.hengiomoinghay || ''
+          }));
+          setWorkouts(formatted);
+        } else {
+          console.error('Error fetching user workouts:', response.message);
+          Alert.alert('Lỗi', response.message || 'Không thể tải danh sách bài tập');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching workouts:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh sách bài tập');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch workouts của chi nhánh (không bao gồm workout của user hiện tại)
+  const fetchBranchWorkouts = async () => {
+    try {
+      setLoadingBranch(true);
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const user = JSON.parse(userData);
+        const chinhanhID = user.additional_info?.chinhanhID;
+        if (chinhanhID) {
+          console.log('Fetching branch workouts for chinhanhID:', chinhanhID);
+          const response = await WorkoutService.getWorkoutsByBranch(chinhanhID);
+          console.log('Branch workouts response:', response);
+          if (response.success) {
+            const formatted = response.data.map(item => ({
+              id: item._id,
+              name: item.ten || 'Không có tên',
+              duration: item.thoigiangoc ? `${item.thoigiangoc} phút` : 'Chưa rõ',
+              category: item.danhmuc?.ten || item.danhmucID?.ten || 'Không có danh mục',
+              categoryId: item.danhmucID?._id || item.danhmucID || null,
+              calories: item.calo || item.calories || 0,
+              completed: item.trangthai === 'hoanthanh',
+              image: item.anhminhhoa || 'https://via.placeholder.com/300x200/ccc/000?text=No+Image',
+              // Full data for edit mode
+              description: item.mota || '',
+              steps: item.cacbuoc || [''],
+              benefits: item.loiich || [''],
+              danhmucID: item.danhmucID?._id || item.danhmucID || '',
+              rawDuration: item.thoigiangoc || 30,
+              hengiomoinghay: item.hengiomoinghay || ''
+            }));
+            setBranchWorkouts(formatted);
+          } else {
+            console.error('Error fetching branch workouts:', response.message);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching branch workouts:', error);
+    } finally {
+      setLoadingBranch(false);
+    }
+  };
 
 //Gọi lại khi trang được focus lại (vd sau khi thêm/sửa)
-useFocusEffect(
-  useCallback(() => {
-    fetchWorkouts();
-  }, [])
-);
+  //Gọi lại khi trang được focus lại (vd sau khi thêm/sửa)
+  useFocusEffect(
+    useCallback(() => {
+      fetchWorkouts();
+      // Chỉ fetch branch workouts cho non-personal users
+      if (!isPersonal) {
+        fetchBranchWorkouts();
+      }
+    }, [isPersonal])
+  );
 
+  const loadUserData = async () => {
+    try {
+      const savedUserData = await AsyncStorage.getItem('userData');
+      if (savedUserData) {
+        setUserData(JSON.parse(savedUserData));
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
 
-  //fomat mau
-  const workoutData = [
-    {
-      id: 1,
-      name: "Cardio Buổi Sáng",
-      duration: "30 phút",
-      calories: 250,
-      completed: true,
-      image: "https://via.placeholder.com/300x200/FF6B6B/white?text=Cardio",
-    },
-    {
-      id: 2,
-      name: "Tập Tạ Cơ Bản",
-      duration: "45 phút",
-      calories: 300,
-      completed: false,
-      image: "https://via.placeholder.com/300x200/4ECDC4/white?text=Weight",
-    },
-    {
-      id: 3,
-      name: "Yoga Thư Giãn",
-      duration: "60 phút",
-      calories: 150,
-      completed: false,
-      image: "https://via.placeholder.com/300x200/9B59B6/white?text=Yoga",
-    },
-    {
-      id: 4,
-      name: "HIIT Cường Độ Cao",
-      duration: "20 phút",
-      calories: 200,
-      completed: false,
-      image: "https://via.placeholder.com/300x200/F39C12/white?text=HIIT",
-    },
-  ];
+  const fetchCategories = useCallback(async () => {
+    try {
+      // Lấy thông tin user
+      const currentBranchId = userData?.additional_info?.chinhanhID || userData?.chinhanhID;
+      const currentUserId = userData?._id;
+      const isPersonal = userData?.loai_tai_khoan === 'personal';
+      
+      console.log('🔍 fetchCategories - User data:', {
+        userType: userData?.loai_tai_khoan,
+        isPersonal,
+        currentUserId,
+        currentBranchId,
+        userData: userData
+      });
+      
+      let result;
+      
+      if (isPersonal) {
+        if (!currentUserId) {
+          console.error('❌ Personal user nhưng không có userID');
+          setCategories([]);
+          return;
+        }
+        // Nếu user là personal, lấy categories theo userID
+        console.log('👤 Personal user - Fetching categories for user:', currentUserId);
+        result = await CategoryService.getCategories(null, currentUserId);
+      } else {
+        if (!currentBranchId) {
+          console.error('❌ Business user nhưng không có chinhanhID');
+          console.error('userData structure:', userData);
+          setCategories([]);
+          return;
+        }
+        // Nếu user không phải personal, lấy categories theo chi nhánh
+        console.log('🏢 Business user - Fetching categories for branch:', currentBranchId);
+        result = await CategoryService.getCategories(currentBranchId, null);
+      }
+      
+      console.log('📋 Categories result:', result);
+      setCategories(result || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      setCategories([]);
+    }
+  }, [userData]);
 
-  const categories = [
-    { name: "Cardio", color: "#FF6B6B" },
-    { name: "Tạ", color: "#4ECDC4" },
-    { name: "Yoga", color: "#9B59B6" },
-    { name: "HIIT", color: "#F39C12" },
-  ];
+  // Load user data khi component mount
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  // Load categories khi userData thay đổi
+  useEffect(() => {
+    if (userData) {
+      fetchCategories();
+    }
+  }, [userData, fetchCategories]);
 
   const toggleDropdown = (workoutId) => {
     setActiveDropdown(activeDropdown === workoutId ? null : workoutId);
+  };
+
+  const toggleCategoryDropdown = (categoryId) => {
+    setActiveCategoryDropdown(activeCategoryDropdown === categoryId ? null : categoryId);
   };
 
   const handleEditWorkout = (workout) => {
@@ -108,7 +223,6 @@ const handleDeleteWorkout = async (workoutId) => {
 
       const res = await WorkoutService.deleteWorkout(workoutId);
       console.log(" Xóa thành công:", res);
-      window.alert("Đã xóa bài tập!");
       await fetchWorkouts();
       return;
     }
@@ -124,7 +238,6 @@ const handleDeleteWorkout = async (workoutId) => {
           onPress: async () => {
             const res = await WorkoutService.deleteWorkout(workoutId);
             console.log("✅ Xóa thành công:", res);
-            Alert.alert("Thành công", "Đã xóa bài tập!");
             await fetchWorkouts();
           },
         },
@@ -140,13 +253,107 @@ const handleDeleteWorkout = async (workoutId) => {
   }
 };
 
+// Category management functions
+const handleAddCategory = () => {
+  setEditingCategory(null);
+  setShowCategoryModal(true);
+};
 
+const handleEditCategory = (category) => {
+  setEditingCategory(category);
+  setShowCategoryModal(true);
+  setActiveCategoryDropdown(null);
+};
 
-  return (
+const handleDeleteCategory = async (categoryId) => {
+  try {
+    if (Platform.OS === "web") {
+      const confirmDelete = window.confirm("Bạn có chắc chắn muốn xóa danh mục này không?");
+      if (!confirmDelete) return;
+
+      try {
+        await CategoryService.deleteCategory(categoryId);
+        await fetchCategories(); // Reload categories
+        window.alert('Xóa danh mục thành công');
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        window.alert(`Lỗi: Không thể xóa danh mục - ${error.message}`);
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Xóa Danh Mục',
+      'Bạn có chắc chắn muốn xóa danh mục này không?',
+      [
+        {
+          text: 'Hủy',
+          style: 'cancel',
+        },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await CategoryService.deleteCategory(categoryId);
+              await fetchCategories(); // Reload categories
+              Alert.alert('Thành công', 'Xóa danh mục thành công');
+            } catch (error) {
+              console.error('Error deleting category:', error);
+              Alert.alert('Lỗi', `Không thể xóa danh mục: ${error.message}`);
+            }
+          },
+        },
+      ]
+    );
+  } catch (error) {
+    console.error('Error in handleDeleteCategory:', error);
+    if (Platform.OS === "web") {
+      window.alert('Có lỗi xảy ra khi xóa danh mục');
+    } else {
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi xóa danh mục');
+    }
+  }
+  setActiveCategoryDropdown(null);
+};
+
+const handleCategorySave = async () => {
+  await fetchCategories(); // Reload categories after save
+};
+
+  // Handle category click for filtering
+  const handleCategoryClick = (categoryId) => {
+    if (selectedCategoryId === categoryId) {
+      // If same category clicked, show all workouts
+      setSelectedCategoryId(null);
+    } else {
+      // Filter by selected category
+      setSelectedCategoryId(categoryId);
+    }
+  };
+
+  // Check if user can manage categories
+  const canManageCategories = () => {
+    return userData && ['business', 'personal'].includes(userData.loai_tai_khoan);
+  };
+
+  // Filter workouts by selected category
+  const getFilteredWorkouts = (workoutList) => {
+    if (!selectedCategoryId) {
+      return workoutList;
+    }
+    return workoutList.filter(workout => workout.categoryId === selectedCategoryId);
+  };
+
+  const filteredWorkouts = getFilteredWorkouts(workouts);
+  const filteredBranchWorkouts = getFilteredWorkouts(branchWorkouts);  return (
     <TouchableOpacity 
       style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.background }]}
       activeOpacity={1}
-      onPress={() => setActiveDropdown(null)}
+      onPress={() => {
+        setActiveDropdown(null);
+        setActiveCategoryDropdown(null);
+      }}
     >
       <Navbar isDarkMode={isDarkMode} setIsDarkMode={setDarkMode} />
       
@@ -161,30 +368,104 @@ const handleDeleteWorkout = async (workoutId) => {
 
         {/* Categories */}
         <View style={styles.section}>
-          <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
-            Danh Mục Tập Luyện
-          </Title>
+          <View style={styles.sectionHeader}>
+            <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+              Danh Mục Tập Luyện
+            </Title>
+            {canManageCategories() && (
+              <Button 
+                mode="contained" 
+                style={styles.addButton}
+                onPress={handleAddCategory}
+              >
+                Thêm Mới
+              </Button>
+            )}
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.categoryRow}>
-              {categories.map((category, index) => (
-                <TouchableOpacity key={index} style={styles.categoryCard}>
-                  <View style={[styles.categoryIcon, { backgroundColor: category.color + '20' }]}>
-                    <Text style={[styles.categoryEmoji]}>🏃</Text>
+              {/* Show All Categories Button */}
+              <View style={styles.categoryContainer}>
+                <TouchableOpacity 
+                  style={[
+                    styles.categoryCard,
+                    selectedCategoryId === null && styles.selectedCategoryCard
+                  ]}
+                  onPress={() => handleCategoryClick(null)}
+                >
+                  <View style={[styles.categoryIcon, { backgroundColor: '#6c757d' + '20' }]}>
+                    <Text style={[styles.categoryEmoji]}>📚</Text>
                   </View>
-                  <Text style={[styles.categoryName, { color: category.color }]}>
-                    {category.name}
+                  <Text style={[styles.categoryName, { color: selectedCategoryId === null ? '#6c757d' : '#999' }]}>
+                    Tất cả
                   </Text>
                 </TouchableOpacity>
+              </View>
+
+              {categories.map((category, index) => (
+                <View key={category._id || index} style={styles.categoryContainer}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.categoryCard,
+                      selectedCategoryId === category._id && styles.selectedCategoryCard
+                    ]}
+                    onPress={() => handleCategoryClick(category._id)}
+                  >
+                    <View style={[styles.categoryIcon, { backgroundColor: '#4ECDC4' + '20' }]}>
+                      <Text style={[styles.categoryEmoji]}>🏃</Text>
+                    </View>
+                    <Text style={[styles.categoryName, { 
+                      color: selectedCategoryId === category._id ? '#4ECDC4' : '#4ECDC4',
+                      fontWeight: selectedCategoryId === category._id ? 'bold' : 'normal'
+                    }]}>
+                      {category.ten}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {/* Menu 3 chấm cho category */}
+                  {canManageCategories() && (
+                    <View style={styles.categoryMenuContainer}>
+                      <TouchableOpacity
+                        style={styles.categoryMenuButton}
+                        onPress={() => toggleCategoryDropdown(category._id)}
+                      >
+                        <MoreVertical stroke="#666" width={16} height={16} />
+                      </TouchableOpacity>
+                      
+                      {activeCategoryDropdown === category._id && (
+                        <View style={styles.categoryDropdown}>
+                          <TouchableOpacity
+                            style={styles.dropdownItem}
+                            onPress={() => handleEditCategory(category)}
+                          >
+                            <Edit stroke="#666" width={14} height={14} />
+                            <Text style={styles.dropdownText}>Sửa</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.dropdownItem}
+                            onPress={() => handleDeleteCategory(category._id)}
+                          >
+                            <Trash2 stroke="#e74c3c" width={14} height={14} />
+                            <Text style={[styles.dropdownText, { color: '#e74c3c' }]}>Xóa</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
               ))}
             </View>
           </ScrollView>
         </View>
 
-        {/* My Workouts | Tự tạo*/}
+        {/* My Workouts | Bài tập của tôi */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
-              Bài Tập Của Tôi
+              {selectedCategoryId 
+                ? `Bài Tập: ${categories.find(cat => cat._id === selectedCategoryId)?.ten || 'Danh mục'} (${filteredWorkouts.length})`
+                : `Bài Tập Của Tôi (${filteredWorkouts.length})`
+              }
             </Title>
             <Button 
               mode="contained" 
@@ -194,7 +475,14 @@ const handleDeleteWorkout = async (workoutId) => {
               Thêm Mới
             </Button>
           </View>
-          {workouts.map((workout) => (
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={[styles.loadingText, { color: isDarkMode ? Colors.darkText : Colors.gray }]}>
+                Đang tải bài tập...
+              </Text>
+            </View>
+          ) : filteredWorkouts.length > 0 ? (
+            filteredWorkouts.map((workout) => (
             <View key={workout.id} style={styles.workoutCard}>
               <TouchableOpacity
                 style={styles.workoutCardContent}
@@ -209,6 +497,9 @@ const handleDeleteWorkout = async (workoutId) => {
                 <Image source={{ uri: workout.image }} style={styles.workoutImage} />
                 <View style={styles.workoutInfo}>
                   <Text style={styles.workoutName}>{workout.name}</Text>
+                  <Text style={{ color: Colors.primary, fontSize: 13, marginBottom: 4 }}>
+                    {workout.category || 'Không có danh mục'}
+                  </Text>
                   <View style={styles.workoutDetails}>
                     <View style={styles.detailItem}>
                       <Ionicons name="time-outline" size={16} color="gray" />
@@ -257,52 +548,90 @@ const handleDeleteWorkout = async (workoutId) => {
                 )}
               </View>
             </View>
-          ))}
+          ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyText, { color: isDarkMode ? Colors.darkText : Colors.gray }]}>
+                Chưa có bài tập nào
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Public Workouts | Của công ty hoặc có sẵn */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
-              Bài Tập Khác
-            </Title>
-          </View>
-          {workoutData.map((workout) => (
-            <TouchableOpacity
-              key={workout.id}
-              style={styles.workoutCard}
-              onPress={() => router.push({ 
-                pathname: '/workout-detail', 
-                params: { 
-                  workoutId: workout.id.toString(),
-                  workoutName: workout.name 
-                } 
-              })}
-            >
-              <Image source={{ uri: workout.image }} style={styles.workoutImage} />
-              <View style={styles.workoutInfo}>
-                <Text style={styles.workoutName}>{workout.name}</Text>
-                <View style={styles.workoutDetails}>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="time-outline" size={16} color="gray" />
-                    <Text style={styles.detailText}>{workout.duration}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="flame-outline" size={16} color="gray" />
-                    <Text style={styles.detailText}>{workout.calories} calo</Text>
-                  </View>
-                </View>
-                <Button
-                  mode={workout.completed ? "outlined" : "contained"}
-                  style={styles.workoutButton}
-                >
-                  {workout.completed ? "Hoàn Thành" : "Bắt Đầu"}
-                </Button>
+        {/* Branch Workouts | Bài tập chi nhánh - Ẩn với personal user */}
+        {!isPersonal && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
+                Bài Tập Chi Nhánh ({filteredBranchWorkouts.length})
+              </Title>
+            </View>
+            {loadingBranch ? (
+              <View style={styles.loadingContainer}>
+                <Text style={[styles.loadingText, { color: isDarkMode ? Colors.darkText : Colors.gray }]}>
+                  Đang tải bài tập chi nhánh...
+                </Text>
               </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+            ) : filteredBranchWorkouts.length > 0 ? (
+              filteredBranchWorkouts.map((workout) => (
+                <View key={`branch-${workout.id}`} style={styles.workoutCard}>
+                  <TouchableOpacity
+                    style={styles.workoutCardContent}
+                    onPress={() => router.push({ 
+                      pathname: '/workout-detail', 
+                      params: { 
+                        workoutId: workout.id.toString(),
+                        workoutName: workout.name 
+                      } 
+                    })}
+                  >
+                    <Image source={{ uri: workout.image }} style={styles.workoutImage} />
+                    <View style={styles.workoutInfo}>
+                      <Text style={styles.workoutName}>{workout.name}</Text>
+                      <Text style={{ color: Colors.primary, fontSize: 13, marginBottom: 4 }}>
+                        {workout.category || 'Không có danh mục'}
+                      </Text>
+                      <View style={styles.workoutDetails}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="time-outline" size={16} color="gray" />
+                          <Text style={styles.detailText}>{workout.duration}</Text>
+                        </View>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="flame-outline" size={16} color="gray" />
+                          <Text style={styles.detailText}>{workout.calories} calo</Text>
+                        </View>
+                      </View>
+                      <Button
+                        mode={workout.completed ? "outlined" : "contained"}
+                        style={styles.workoutButton}
+                      >
+                        {workout.completed ? "Hoàn Thành" : "Bắt Đầu"}
+                      </Button>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyText, { color: isDarkMode ? Colors.darkText : Colors.gray }]}>
+                  Chưa có bài tập nào từ chi nhánh
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
+      
+      {/* Category Form Modal */}
+      <CategoryFormModal
+        visible={showCategoryModal}
+        onClose={() => setShowCategoryModal(false)}
+        onSave={handleCategorySave}
+        editCategory={editingCategory}
+        isDarkMode={isDarkMode}
+        chinhanhID={userData?.loai_tai_khoan !== 'personal' ? (userData?.additional_info?.chinhanhID || userData?.chinhanhID) : null}
+        userID={userData?.loai_tai_khoan === 'personal' ? userData?._id : null}
+      />
     </TouchableOpacity>
   );
 }
@@ -325,10 +654,41 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 18 },
   categoryRow: { flexDirection: 'row', gap: 12, paddingVertical: 8 },
-  categoryCard: { alignItems: 'center', padding: 8 },
+  categoryContainer: { position: 'relative' },
+  categoryCard: { alignItems: 'center', padding: 8, borderRadius: 8 },
+  selectedCategoryCard: {
+    backgroundColor: 'rgba(76, 205, 196, 0.1)',
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+  },
   categoryIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   categoryEmoji: { fontSize: 20 },
   categoryName: { fontWeight: 'bold', marginTop: 4 },
+  categoryMenuContainer: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    zIndex: 1,
+  },
+  categoryMenuButton: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  categoryDropdown: {
+    position: 'absolute',
+    top: 25,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 6,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    minWidth: 100,
+    zIndex: 1000,
+  },
   workoutCard: { 
     flexDirection: 'row', 
     backgroundColor: 'white', 
@@ -388,4 +748,19 @@ const styles = StyleSheet.create({
   detailText: { marginLeft: 4, color: 'gray' },
   workoutButton: { marginTop: 4 },
   addButton: { borderRadius: 8 },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+  },
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
 });

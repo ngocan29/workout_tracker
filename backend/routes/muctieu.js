@@ -5,7 +5,14 @@ const User = require('../models/User');
 
 router.get('/', async (req, res) => {
   try {
-    const muctieu = await Muctieu.find();
+    const { userID } = req.query;
+    let query = {};
+    
+    if (userID) {
+      query.userID = userID;
+    }
+    
+    const muctieu = await Muctieu.find(query);
     res.json(muctieu);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -13,16 +20,32 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const muctieu = new Muctieu({
-    ...req.body,
-    ngaytao: req.body.ngaytao || new Date(),
-    tongthoigiantap: req.body.tongthoigiantap || 0,
-    thongke: req.body.thongke || 0
-  });
   try {
+    // Validate required fields
+    if (!req.body.userID) {
+      return res.status(400).json({ error: 'userID is required' });
+    }
+    if (!req.body.muctieu) {
+      return res.status(400).json({ error: 'muctieu is required' });
+    }
+
+    // Validate userID format
+    if (!req.body.userID.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: 'Invalid userID format' });
+    }
+
+    const muctieu = new Muctieu({
+      ...req.body,
+      ngaytao: req.body.ngaytao || new Date(),
+      tongthoigiantap: req.body.tongthoigiantap || 0,
+      thongke: req.body.thongke || 0,
+      thoigiantap: req.body.thoigiantap || 0
+    });
+    
     const newMuctieu = await muctieu.save();
     res.status(201).json(newMuctieu);
   } catch (err) {
+    console.error('Error creating muctieu:', err);
     res.status(400).json({ error: err.message });
   }
 });

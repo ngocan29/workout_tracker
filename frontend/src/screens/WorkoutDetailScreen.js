@@ -1,98 +1,163 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
 import { ArrowLeft } from 'react-native-feather';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../constants/Colors';
+import { WorkoutService } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 export default function WorkoutDetailScreen() {
   const router = useRouter();
   const { workoutId } = useLocalSearchParams();
-  const [workoutTimer, setWorkoutTimer] = useState(1800);
+  const [workoutTimer, setWorkoutTimer] = useState(0); // Sẽ được set từ thoigiangoc
+  const [initialTimer, setInitialTimer] = useState(0); // Lưu thời gian gốc
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [workout, setWorkout] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [workoutStartTime, setWorkoutStartTime] = useState(null);
+  const [totalWorkoutTime, setTotalWorkoutTime] = useState(0); // Tổng thời gian đã tập
 
-  // Mock data cho các bài tập khác nhau
-  const workoutDetails = {
-    1: {
-      name: 'Cardio Buổi Sáng',
-      image: 'https://via.placeholder.com/300x200/FF6B6B/white?text=Cardio',
-      description: 'Tập cardio buổi sáng giúp tăng cường trao đổi chất, đốt cháy mỡ thừa và cải thiện sức bền tim mạch.',
-      steps: [
-        'Khởi động 5 phút với các động tác stretching nhẹ nhàng',
-        'Chạy tại chỗ với cường độ vừa phải trong 10 phút',
-        'Thực hiện 50 lần nhảy dây, nghỉ 30 giây',
-        'Thực hiện 10 burpees, nghỉ 30 giây',
-        'Lặp lại 3 vòng',
-      ],
-      benefits: [
-        'Đốt cháy 250-300 calories',
-        'Tăng cường sức bền tim mạch',
-        'Cải thiện trao đổi chất',
-        'Giảm mỡ toàn thân',
-      ],
-    },
-    2: {
-      name: 'Tập Tạ Cơ Bản',
-      image: 'https://via.placeholder.com/300x200/4ECDC4/white?text=Weight',
-      description: 'Bài tập tạ cơ bản giúp xây dựng sức mạnh cơ bắp và định hình cơ thể.',
-      steps: [
-        'Khởi động 10 phút với các động tác stretch',
-        'Squat: 3 sets x 12 reps',
-        'Push-up: 3 sets x 10 reps',
-        'Deadlift: 3 sets x 8 reps',
-        'Plank: 3 sets x 30 giây',
-      ],
-      benefits: [
-        'Tăng khối lượng cơ bắp',
-        'Cải thiện sức mạnh tổng thể',
-        'Đốt cháy 300-400 calories',
-        'Tăng cường mật độ xương',
-      ],
-    },
-    3: {
-      name: 'Yoga Thư Giãn',
-      image: 'https://via.placeholder.com/300x200/9B59B6/white?text=Yoga',
-      description: 'Yoga giúp thư giãn tinh thần, tăng tính linh hoạt và cân bằng cơ thể.',
-      steps: [
-        'Tư thế núi (Mountain Pose) - 2 phút',
-        'Tư thế chó úp mặt (Downward Dog) - 3 phút',
-        'Tư thế chiến binh (Warrior Pose) - 5 phút mỗi bên',
-        'Tư thế em bé (Child Pose) - 3 phút',
-        'Thiền thư giãn - 10 phút',
-      ],
-      benefits: [
-        'Giảm stress và lo âu',
-        'Tăng tính linh hoạt',
-        'Cải thiện chất lượng giấc ngủ',
-        'Tăng cường sự tập trung',
-      ],
-    },
+useEffect(() => {
+  const fetchWorkoutDetail = async () => {
+    console.log("workoutId:", workoutId)
+    try {
+      const res = await WorkoutService.getWorkoutDetail(workoutId);
+      console.log("✅ Dữ liệu bài tập:", res);
+
+      // Kiểm tra phản hồi từ API
+      if (res && (res.data || res)._id) {
+        const data = res.data || res;
+        setWorkout(data);
+        
+        // Set thời gian từ thoigiangoc (chuyển từ phút sang giây)
+        const timeInSeconds = (data.thoigiangoc || 30) * 60;
+        setWorkoutTimer(timeInSeconds);
+        setInitialTimer(timeInSeconds);
+        setTotalWorkoutTime(data.sophuttap || 0);
+      } else {
+        console.warn("⚠️ Không tìm thấy bài tập hoặc dữ liệu rỗng.");
+        setWorkout(null);
+      }
+    } catch (error) {
+      console.error("❌ Lỗi khi tải chi tiết bài tập:", error);
+      setWorkout(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const workout = workoutDetails[workoutId] || workoutDetails[1];
+  if (workoutId) fetchWorkoutDetail();
+}, [workoutId]);
 
-  useEffect(() => {
-    let timer;
-    if (isTimerRunning) {
-      timer = setInterval(() => {
-        setWorkoutTimer(prev => {
-          if (prev <= 1) {
-            setIsTimerRunning(false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [isTimerRunning]);
+// Timer effect
+useEffect(() => {
+  let timer;
+  if (isTimerRunning) {
+    timer = setInterval(() => {
+      setWorkoutTimer(prev => {
+        if (prev <= 1) {
+          setIsTimerRunning(false);
+          handleWorkoutComplete();
+          return 0;
+        }
+        return prev - 1;
+      });
+      
+      // Cập nhật tổng thời gian đã tập (mỗi giây)
+      setTotalWorkoutTime(prev => prev + 1/60); // Chuyển sang phút
+    }, 1000);
+  }
+
+  return () => clearInterval(timer);
+}, [isTimerRunning]);
+
+// Save workout progress khi component unmount hoặc pause
+const saveWorkoutProgress = async () => {
+  if (!workout) return;
+  
+  try {
+    const timeWorkedInMinutes = Math.floor(totalWorkoutTime);
+    
+    await WorkoutService.updateWorkout(workout._id, {
+      sophuttap: timeWorkedInMinutes,
+      thongke: workout.thongke + 1, // Tăng thống kê
+      ngaycapnhat: new Date()
+    });
+    
+    console.log('✅ Đã lưu tiến độ tập luyện:', timeWorkedInMinutes, 'phút');
+  } catch (error) {
+    console.error('❌ Lỗi khi lưu tiến độ:', error);
+  }
+};
+
+// Handle workout completion
+const handleWorkoutComplete = async () => {
+  if (!workout) return;
+  
+  try {
+    await WorkoutService.updateWorkout(workout._id, {
+      trangthai: 'hoanthanh',
+      sophuttap: Math.floor(totalWorkoutTime),
+      thongke: workout.thongke + 1,
+      ngaycapnhat: new Date()
+    });
+    
+    console.log('✅ Bài tập đã hoàn thành');
+    router.back();
+  } catch (error) {
+    console.error('❌ Lỗi khi hoàn thành bài tập:', error);
+  }
+};
+
+// Handle pause/back navigation
+const handlePauseOrExit = async () => {
+  if (isTimerRunning || totalWorkoutTime > 0) {
+    setIsTimerRunning(false);
+    await saveWorkoutProgress();
+  }
+  router.back();
+};
+
+// Start/pause timer
+const toggleTimer = () => {
+  if (!isTimerRunning) {
+    setWorkoutStartTime(new Date());
+  }
+  setIsTimerRunning(!isTimerRunning);
+};
+
+// Reset timer
+const resetTimer = () => {
+  setIsTimerRunning(false);
+  setWorkoutTimer(initialTimer);
+  setTotalWorkoutTime(0);
+};
+
+  //tránh crash khi workout chưa load
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Đang tải dữ liệu...</Text>
+      </View>
+    );
+  }
+  
+  if (!workout) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Bài tập không tồn tại hoặc đã bị xóa.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={handlePauseOrExit}>
           <ArrowLeft stroke={Colors.text} width={24} height={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{workout.name}</Text>
+        <Text style={styles.headerTitle}>{workout.ten}</Text>
         <View style={{ width: 24 }} />
       </View>
       
@@ -102,27 +167,30 @@ export default function WorkoutDetailScreen() {
         contentContainerStyle={styles.scrollContainer}
       >
         <View style={styles.imageCard}>
-          <Image source={{ uri: workout.image }} style={styles.workoutImage} />
-          <Text style={styles.description}>{workout.description}</Text>
+          <Image source={{ uri: workout.anhminhhoa || 'https://via.placeholder.com/150' }} style={styles.workoutImage} />
+          <Text style={styles.description}>{workout.mota}</Text>
         </View>
         
         <View style={styles.timerCard}>
           <Text style={styles.timerText}>
             {Math.floor(workoutTimer / 60)}:{String(workoutTimer % 60).padStart(2, '0')}
           </Text>
+          
+          {/* Hiển thị thời gian đã tập */}
+          <Text style={styles.progressText}>
+            Đã tập: {Math.floor(totalWorkoutTime)} phút
+          </Text>
+          
           <View style={styles.timerButtons}>
             <TouchableOpacity
               style={[styles.timerButton, isTimerRunning && { backgroundColor: Colors.gray }]}
-              onPress={() => setIsTimerRunning(!isTimerRunning)}
+              onPress={toggleTimer}
             >
               <Text style={styles.timerButtonText}>{isTimerRunning ? 'Tạm Dừng' : 'Bắt Đầu'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.timerButton}
-              onPress={() => {
-                setWorkoutTimer(1800);
-                setIsTimerRunning(false);
-              }}
+              onPress={resetTimer}
             >
               <Text style={styles.timerButtonText}>Làm Lại</Text>
             </TouchableOpacity>
@@ -130,7 +198,7 @@ export default function WorkoutDetailScreen() {
         </View>
         
         <Text style={styles.sectionTitle}>Các Bước Thực Hiện</Text>
-        {workout.steps.map((step, index) => (
+        {Array.isArray(workout.cacbuoc) && workout.cacbuoc.map((step, index) => (
           <View key={index} style={styles.stepItem}>
             <View style={styles.stepNumber}>
               <Text style={styles.stepNumberText}>{index + 1}</Text>
@@ -138,13 +206,13 @@ export default function WorkoutDetailScreen() {
             <Text style={styles.stepText}>{step}</Text>
           </View>
         ))}
-        
         <Text style={styles.sectionTitle}>Lợi Ích</Text>
-        {workout.benefits.map((benefit, index) => (
+        {Array.isArray(workout.loiich) && workout.loiich.map((benefit, index) => (
           <View key={index} style={styles.benefitItem}>
             <Text style={styles.benefitText}>✓ {benefit}</Text>
           </View>
         ))}
+
         
         {/* Padding bottom để tránh nút Complete che nội dung */}
         <View style={{ height: 80 }} />
@@ -152,7 +220,7 @@ export default function WorkoutDetailScreen() {
       
       {/* Fixed Complete Button */}
       <View style={styles.fixedButtonContainer}>
-        <TouchableOpacity style={styles.completeButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.completeButton} onPress={handleWorkoutComplete}>
           <Text style={styles.completeButtonText}>Hoàn Thành</Text>
         </TouchableOpacity>
       </View>
@@ -214,7 +282,13 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: 'bold',
     color: Colors.text,
+    marginBottom: 8,
+  },
+  progressText: {
+    fontSize: 14,
+    color: Colors.primary,
     marginBottom: 12,
+    fontWeight: '600',
   },
   timerButtons: {
     flexDirection: 'row',

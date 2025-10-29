@@ -22,6 +22,17 @@ export const API_CONFIG = {
     
     // User endpoints
     USERS: '/users',
+    
+    // Goal endpoints
+    GOALS: '/muctieu',
+    GOAL_CREATE: '/muctieu',
+    GOAL_UPDATE: '/muctieu',
+    GOAL_DELETE: '/muctieu',
+    
+    // Nutrition endpoints
+    NUTRITION: '/dinhduong',
+    NUTRITION_CREATE: '/dinhduong',
+    NUTRITION_UPDATE: '/dinhduong',
   }
 };
 

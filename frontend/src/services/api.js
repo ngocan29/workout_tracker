@@ -158,9 +158,20 @@ export const BranchService = {
 
 // Workout Services
 export const WorkoutService = {
-  // Lấy danh sách bài tập
-  getWorkouts: async () => {
-    return await apiCall(API_CONFIG.ENDPOINTS.WORKOUTS, 'GET');
+  // Lấy danh sách bài tập với userID filter
+  getWorkouts: async (userID = null) => {
+    const url = userID 
+      ? `${API_CONFIG.ENDPOINTS.WORKOUTS}?userID=${userID}`
+      : API_CONFIG.ENDPOINTS.WORKOUTS;
+    return await apiCall(url, 'GET');
+  },
+
+  // Lấy bài tập theo chi nhánh
+  getWorkoutsByBranch: async (chinhanhID, danhmucID = null) => {
+    const url = danhmucID 
+      ? `${API_CONFIG.ENDPOINTS.WORKOUTS}/chinhanh/${chinhanhID}?danhmucID=${danhmucID}`
+      : `${API_CONFIG.ENDPOINTS.WORKOUTS}/chinhanh/${chinhanhID}`;
+    return await apiCall(url, 'GET');
   },
 
   // Tạo bài tập mới
@@ -181,5 +192,80 @@ export const WorkoutService = {
   // Lấy chi tiết bài tập
   getWorkoutDetail: async (workoutId) => {
     return await apiCall(`${API_CONFIG.ENDPOINTS.WORKOUTS}/${workoutId}`, 'GET');
+  },
+};
+
+// Category Services
+export const CategoryService = {
+  // Lấy danh sách danh mục (ưu tiên chi nhánh, fallback về userID)
+  getCategories: async (chinhanhID = null, userID = null) => {
+    if (chinhanhID) {
+      // Nếu có chi nhánh, lấy theo chi nhánh
+      console.log('🏢 Fetching categories by branch:', chinhanhID);
+      return await apiCall(`/danhmuc/chinhanh/${chinhanhID}`, 'GET');
+    } else if (userID) {
+      // Nếu không có chi nhánh nhưng có userID, lấy theo user
+      console.log('👤 Fetching categories by user:', userID);
+      return await apiCall(`/danhmuc/user/${userID}`, 'GET');
+    }
+    // Nếu không có gì, trả về mảng rỗng thay vì gọi tất cả
+    console.warn('⚠️ No chinhanhID or userID provided for getCategories');
+    return [];
+  },
+
+  // Lấy danh mục theo userID
+  getCategoriesByUser: async (userID) => {
+    return await apiCall(`/danhmuc/user/${userID}`, 'GET');
+  },
+
+  // Tạo danh mục mới (tự động gán chinhanhID và userID nếu có)
+  createCategory: async (categoryData, chinhanhID = null, userID = null) => {
+    const dataWithInfo = { ...categoryData };
+    
+    // Gán chinhanhID nếu có (cho business user)
+    if (chinhanhID) {
+      dataWithInfo.chinhanhID = chinhanhID;
+    }
+    
+    // Gán userID nếu có (cho personal user) 
+    // userID sẽ được gửi qua header tự động từ apiCall utility
+    
+    return await apiCall('/danhmuc', 'POST', dataWithInfo);
+  },
+
+  // Cập nhật danh mục
+  updateCategory: async (categoryId, categoryData) => {
+    return await apiCall(`/danhmuc/${categoryId}`, 'PUT', categoryData);
+  },
+
+  // Xóa danh mục
+  deleteCategory: async (categoryId) => {
+    return await apiCall(`/danhmuc/${categoryId}`, 'DELETE');
+  },
+
+  // Lấy chi tiết danh mục
+  getCategoryDetail: async (categoryId) => {
+    return await apiCall(`/danhmuc/${categoryId}`, 'GET');
+  },
+};
+
+// Nutrition Service - API cho dinh dưỡng
+export const NutritionService = {
+  // Lấy thông tin dinh dưỡng của khách hàng (mới nhất)
+  getNutritionData: async (khachhangUserID) => {
+    console.log('🍎 Fetching nutrition data for user:', khachhangUserID);
+    return await apiCall(`${API_CONFIG.ENDPOINTS.NUTRITION}?khachhangUserID=${khachhangUserID}`, 'GET');
+  },
+
+  // Tạo thông tin dinh dưỡng mới (lần đầu tiên)
+  createNutritionData: async (nutritionData) => {
+    console.log('🌱 Creating nutrition data:', nutritionData);
+    return await apiCall(API_CONFIG.ENDPOINTS.NUTRITION_CREATE, 'POST', nutritionData);
+  },
+
+  // Cập nhật thông tin dinh dưỡng (hàng tháng)
+  updateNutritionData: async (nutritionId, nutritionData) => {
+    console.log('🔄 Updating nutrition data:', nutritionId, nutritionData);
+    return await apiCall(`${API_CONFIG.ENDPOINTS.NUTRITION_UPDATE}/${nutritionId}`, 'PUT', nutritionData);
   },
 };

@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 const sodocotheSchema = new mongoose.Schema({
-  khachhangUserID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   bophan: [{
     ten: { type: String, required: true },

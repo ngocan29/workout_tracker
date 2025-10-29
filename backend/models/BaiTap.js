@@ -10,9 +10,10 @@ const baitapSchema = new mongoose.Schema({
   loiich: { type: Array, required: true },
   trangthai: { type: String, enum: ['hoanthanh', 'chuahoanthanh'], required: true },
   thongke: { type: Number, min: 0, default: 0 },
-  khachhangUserID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  nhanvienUserID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  sophuttap: { type: Number, min: 0, default: 0 },
+  anhminhhoa: { type: String, default: 'https://via.placeholder.com/300x200/ccc/000?text=No+Image' },
   userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  chinhanhID: { type: mongoose.Schema.Types.ObjectId, ref: 'Chinhanh' },
   danhmucID: { type: mongoose.Schema.Types.ObjectId, ref: 'Danhmuc' },
   ngaytao: { type: Date, required: true },
   ngaycapnhat: { type: Date }

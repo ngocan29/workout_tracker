@@ -13,14 +13,19 @@ import { Card, Title, Paragraph } from 'react-native-paper';
 import ProgressCircle from 'react-native-progress/Circle';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import Navbar from '../components/ui/Navbar';
 import { Colors } from '../constants/Colors';
 import { getCustomersByBranch, getCustomersByEmployee } from '../services/customerApi';
 import { getEmployeesByBranch } from '../services/employeeApi';
+import { createGoal, getTodayGoal, getTotalWorkoutTime } from '../services/goalApi';
+import { WorkoutService } from '../services/api';
 import CustomerFormModal from '../components/CustomerFormModal';
 import EmployeeFormModal from '../components/EmployeeFormModal.js';
 
 export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userData }) {
+  const router = useRouter();
+  
   // Hiển thị tên user và thông tin chi nhánh
   const userName = userData?.ho_ten || userData?.name || "User";
   const branchName = branchData?.ten_chi_nhanh || branchData?.name || "Chi nhánh";
@@ -38,11 +43,17 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
   // State để lưu số lượng thực tế
   const [customerCount, setCustomerCount] = useState(0);
   const [employeeCount, setEmployeeCount] = useState(0);
+  const [workoutCount, setWorkoutCount] = useState(0);
   const [dataLoaded, setDataLoaded] = useState(false);
   
   // State để quản lý modal
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  
+  // State để lưu tiến độ thực tế
+  const [todayGoalData, setTodayGoalData] = useState(null);
+  const [totalWorkoutTime, setTotalWorkoutTime] = useState(0);
+  const [goalProgress, setGoalProgress] = useState(0);
 
   // Load số lượng khách hàng và nhân viên thực tế
   const loadRealData = useCallback(async () => {
@@ -67,6 +78,19 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
         const employeesData = employeesResponse.success ? employeesResponse.data : [];
         setEmployeeCount(employeesData.length);
       }
+
+      // Load workouts for all user types
+      try {
+        const workoutResponse = await WorkoutService.getWorkouts(userData._id);
+        if (workoutResponse.success) {
+          setWorkoutCount(workoutResponse.data.length);
+        } else {
+          setWorkoutCount(0);
+        }
+      } catch (error) {
+        console.error('Error loading workouts:', error);
+        setWorkoutCount(0);
+      }
       
       setDataLoaded(true);
     } catch (error) {
@@ -74,24 +98,43 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
       // Fallback to default values
       setCustomerCount(0);
       setEmployeeCount(0);
+      setWorkoutCount(0);
       setDataLoaded(true);
     }
   }, [userData]);
+
+  // Load workout progress for today
+  const loadWorkoutProgress = useCallback(async () => {
+    try {
+      if (!userData?._id) return;
+      
+      const totalTime = await getTotalWorkoutTime(userData._id);
+      setTotalWorkoutTime(totalTime);
+      
+      // Calculate progress percentage
+      if (todayGoalData && todayGoalData.muctieu) {
+        const progress = Math.min(totalTime / parseInt(todayGoalData.muctieu), 1);
+        setGoalProgress(progress);
+      }
+    } catch (error) {
+      console.error('Error loading workout progress:', error);
+    }
+  }, [userData, todayGoalData]);
 
   const data = userData?.loai_tai_khoan === 'business' 
     ? [
         { value: dataLoaded ? customerCount : (userData?.so_khach_hang || 0), label: "Số Khách Hàng" },
         { value: dataLoaded ? employeeCount : (userData?.so_nhan_vien || 0), label: "Số Nhân Viên" },
-        { value: 11, label: "Số Bài Tập" }
+        { value: dataLoaded ? workoutCount : 0, label: "Số Bài Tập" }
       ]
     : userData?.loai_tai_khoan === 'personal' && userData?.additional_info?.vai_tro === 'nhanvien'
     ? [
         { value: dataLoaded ? customerCount : (userData?.so_khach_hang || 0), label: "Số Khách Hàng" },
         { value: userData?.lich_hen_gan_nhat || 2, label: "Lịch hẹn gần nhất" },
-        { value: 11, label: "Số Bài Tập" },
+        { value: dataLoaded ? workoutCount : 0, label: "Số Bài Tập" },
       ]
     : [
-        { value: 11, label: "Số Bài Tập" },
+        { value: dataLoaded ? workoutCount : 0, label: "Số Bài Tập" },
         { value: 420, label: "Calo đốt" },
         { value: 40, label: "Điểm Thưởng" },
       ];
@@ -99,20 +142,31 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
   const checkTodayGoal = useCallback(async () => {
     try {
       // Chỉ hiển thị modal cho personal user
-      if (!isPersonal) {
+      if (!isPersonal || !userData?._id) {
         return;
       }
       
+      // Check if user has a goal for today
+      const todayGoal = await getTodayGoal(userData._id);
+      
+      if (!todayGoal) {
+        setShowGoalModal(true);
+      } else {
+        setTodayGoalData(todayGoal);
+        // Load current workout progress
+        await loadWorkoutProgress();
+      }
+    } catch (error) {
+      console.error('Error checking today goal:', error);
+      // Fallback to AsyncStorage if API fails
       const today = new Date().toDateString();
       const todayGoalData = await AsyncStorage.getItem(`goal_${today}`);
       
       if (!todayGoalData) {
         setShowGoalModal(true);
       }
-    } catch (error) {
-      console.error('Error checking today goal:', error);
     }
-  }, [isPersonal]);
+  }, [isPersonal, userData, loadWorkoutProgress]);
 
   const loadGoalHistory = useCallback(async () => {
     try {
@@ -168,28 +222,49 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
       return;
     }
 
+    if (!userData?._id) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
+      return;
+    }
+
     try {
-      const today = new Date().toDateString();
+      // Create goal data for API
       const goalData = {
+        userID: userData._id,
+        muctieu: dailyGoal,
+        thoigiantap: 0,
+        trangthai: 'dangtap',
+        ngaytao: new Date()
+        // baitapID is optional for daily goals
+      };
+      
+      // Save to backend API
+      const newGoal = await createGoal(goalData);
+      setTodayGoalData(newGoal);
+      
+      // Also save to AsyncStorage as backup
+      const today = new Date().toDateString();
+      const localGoalData = {
         goal: parseInt(dailyGoal),
         completed: 0,
         date: today
       };
+      await AsyncStorage.setItem(`goal_${today}`, JSON.stringify(localGoalData));
       
-      await AsyncStorage.setItem(`goal_${today}`, JSON.stringify(goalData));
       setShowGoalModal(false);
       setDailyGoal('');
       loadGoalHistory();
+      loadWorkoutProgress();
       
       Alert.alert('Thành công', `Đã thiết lập mục tiêu ${dailyGoal} phút cho hôm nay!`);
     } catch (error) {
       console.error('Error saving goal:', error);
-      Alert.alert('Lỗi', 'Không thể lưu mục tiêu');
+      Alert.alert('Lỗi', 'Không thể lưu mục tiêu. Vui lòng thử lại!');
     }
   };
 
   useEffect(() => {
-    // Chỉ hiển thị modal chọn mục tiêu cho personal user
+    // Chỉ hiển thị modal chọn mục tiêu cho personal user (customers)
     if (isPersonal) {
       checkTodayGoal();
     }
@@ -203,7 +278,18 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
     }
   }, [userData, loadRealData]);
 
+  useEffect(() => {
+    // Load workout progress when goal data is available
+    if (todayGoalData && userData) {
+      loadWorkoutProgress();
+    }
+  }, [todayGoalData, userData, loadWorkoutProgress]);
+
   // Handlers cho các actions
+  const handleStartWorkout = () => {
+    router.push('/add-workout');
+  };
+
   const handleAddCustomer = () => {
     setShowCustomerModal(true);
   };
@@ -358,7 +444,7 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
           </Title>
           <View style={styles.quickActions}>
             {/* Nút Bắt Đầu Tập - hiển thị cho tất cả */}
-            <TouchableOpacity style={styles.actionCard}>
+            <TouchableOpacity style={styles.actionCard} onPress={handleStartWorkout}>
               <View style={[styles.actionIcon, { backgroundColor: '#fee2e2' }]}>
                 <Ionicons name="play-circle" size={24} color="#ef4444" />
               </View>
@@ -420,13 +506,15 @@ export default function HomeScreen({ isDarkMode, setDarkMode, branchData, userDa
                 <View style={styles.progressContent}>
                   <ProgressCircle
                     size={60}
-                    progress={0.6}
+                    progress={goalProgress}
                     color="#4ECDC4"
                     thickness={8}
                   />
                   <View style={styles.progressText}>
                     <Text style={styles.progressLabel}>Thời Gian Tập</Text>
-                    <Text style={styles.progressValue}>36 / 60 phút</Text>
+                    <Text style={styles.progressValue}>
+                      {totalWorkoutTime} / {todayGoalData?.muctieu || 0} phút
+                    </Text>
                   </View>
                 </View>
               </Card>

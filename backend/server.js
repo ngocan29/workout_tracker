@@ -9,6 +9,7 @@ const muctieuRoutes = require('./routes/muctieu');
 const dinhduongRoutes = require('./routes/dinhduong');
 const sodocotheRoutes = require('./routes/sodocothe');
 const lichhenRoutes = require('./routes/lichhen');
+const danhmucRoutes = require('./routes/danhmuc');
 
 const app = express();
 
@@ -44,7 +45,8 @@ app.get('/', (req, res) => {
       '/muctieu',
       '/dinhduong',
       '/sodocothe',
-      '/lichhen'
+      '/lichhen',
+      '/danhmuc'
     ]
   });
 });
@@ -58,6 +60,7 @@ app.use('/muctieu', muctieuRoutes);
 app.use('/dinhduong', dinhduongRoutes);
 app.use('/sodocothe', sodocotheRoutes);
 app.use('/lichhen', lichhenRoutes);
+app.use('/danhmuc', danhmucRoutes);
 
 const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0'; // Listen on all network interfaces
@@ -70,7 +73,11 @@ app.listen(PORT, HOST, () => {
   console.log(`  - http://192.168.1.124:${PORT}/users`);
   console.log(`  - http://192.168.1.124:${PORT}/auth/login`);
   console.log(`  - http://192.168.1.124:${PORT}/chinhanh`);
-  console.log(`  - http://192.168.1.124:${PORT}/khachhang`);
-  console.log(`  - http://192.168.1.124:${PORT}/nhanvien`);
+  console.log(`  - http://192.168.1.124:${PORT}/baitap`);
+  console.log(`  - http://192.168.1.124:${PORT}/muctieu`);
+  console.log(`  - http://192.168.1.124:${PORT}/dinhduong`);
+  console.log(`  - http://192.168.1.124:${PORT}/sodocothe`);
+  console.log(`  - http://192.168.1.124:${PORT}/lichhen`);
+  console.log(`  - http://192.168.1.124:${PORT}/danhmuc`);
   console.log(`\n🔥 Ready for production use!`);
 });

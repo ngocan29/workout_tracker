@@ -1,34 +1,36 @@
-import React, { useState } from 'react';
-import {View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Platform} from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Platform } from 'react-native';
 import { ArrowLeft, Plus, Trash2 } from 'react-native-feather';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
-import { WorkoutService } from '../services/api';
+import { WorkoutService, CategoryService } from '../services/api';
 
 export default function AddWorkoutScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  
-  // Check if this is edit mode
+  const [categories, setCategories] = useState([]);
+  const [userData, setUserData] = useState(null);
+
+  //Check if this is edit mode
   const isEditMode = params.editMode === 'true';
   const editWorkoutData = params.workoutData ? JSON.parse(params.workoutData) : null;
 
-  // Form state
+  //Form state
   const [formData, setFormData] = useState(() => {
     if (isEditMode && editWorkoutData) {
       return {
         ten: editWorkoutData.name || '',
         anhminhhoa: editWorkoutData.image || '',
         mota: editWorkoutData.description || '',
-        thoigiangoc: parseInt(editWorkoutData.duration) || 30,
-        hengiomoinghay: '',
+        thoigiangoc: editWorkoutData.rawDuration || parseInt(editWorkoutData.duration) || 30,
+        hengiomoinghay: editWorkoutData.hengiomoinghay || '',
         calotieuthukhoiluong: editWorkoutData.calories || 0,
         cacbuoc: editWorkoutData.steps || [''],
         loiich: editWorkoutData.benefits || [''],
-        danhmuc: editWorkoutData.category || 'cardio',
+        danhmuc: editWorkoutData.danhmucID || editWorkoutData.categoryId || '',
       };
     }
     return {
@@ -40,23 +42,68 @@ export default function AddWorkoutScreen() {
       calotieuthukhoiluong: 0,
       cacbuoc: [''],
       loiich: [''],
-      danhmuc: 'cardio',
+      danhmuc: '',
     };
   });
 
-  // Categories options
-  const categories = [
-    { label: 'Cardio', value: 'cardio' },
-    { label: 'Tạ', value: 'ta' },
-    { label: 'Yoga', value: 'yoga' },
-    { label: 'HIIT', value: 'hiit' },
-    { label: 'Thể dục', value: 'theduc' },
-    { label: 'Khác', value: 'khac' },
-  ];
+  // Load user data và categories khi component mount
+  const loadUserData = async () => {
+    try {
+      const savedUserData = await AsyncStorage.getItem('userData');
+      if (savedUserData) {
+        setUserData(JSON.parse(savedUserData));
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const currentBranchId = userData?.additional_info?.chinhanhID || userData?.chinhanhID;
+      const currentUserId = userData?._id;
+      const isPersonal = userData?.loai_tai_khoan === 'personal';
+      
+      let result;
+      
+      if (isPersonal) {
+        if (!currentUserId) {
+          console.error('❌ Personal user nhưng không có userID');
+          setCategories([]);
+          return;
+        }
+        result = await CategoryService.getCategories(null, currentUserId);
+      } else {
+        if (!currentBranchId) {
+          console.error('❌ Business user nhưng không có chinhanhID');
+          setCategories([]);
+          return;
+        }
+        result = await CategoryService.getCategories(currentBranchId, null);
+      }
+      
+      setCategories(result || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      setCategories([]);
+    }
+  }, [userData]);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  useEffect(() => {
+    if (userData) {
+      loadCategories();
+    }
+  }, [userData, loadCategories]);
+
+  //cập nhật formData
   const updateFormData = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
+
 
   const addStep = () => {
     setFormData(prev => ({
@@ -104,12 +151,12 @@ export default function AddWorkoutScreen() {
     }));
   };
 
-  // chinh sua thong bao alert
+  //chinh sua thong bao alert
   const showAlert = (title, message, onPressOK) => {
     if (Platform.OS === 'web') {
-      // Hiển thị alert web
+      //hiển thị alert web
       window.alert(`${title}\n${message}`);
-      // Chỉ gọi callback nếu thực sự là một hàm
+      //chỉ gọi callback nếu thực sự là một hàm
       if (typeof onPressOK === 'function') {
         onPressOK();
       }
@@ -138,6 +185,11 @@ export default function AddWorkoutScreen() {
         return;
       }
 
+      if (!formData.danhmuc) {
+        showAlert('Lỗi', 'Vui lòng chọn danh mục');
+        return;
+      }
+
       // Get current user info
       const userData = await AsyncStorage.getItem('userData');
       const user = userData ? JSON.parse(userData) : null;
@@ -147,27 +199,26 @@ export default function AddWorkoutScreen() {
         return;
       }
 
-      // Prepare workout data
+      //chuan bi gui data len backend
       const workoutData = {
         ten: formData.ten.trim() || ' ',
         anhminhhoa: formData.anhminhhoa.trim() || ' ',
         mota: formData.mota.trim() || ' ',
         thoigiangoc: formData.thoigiangoc || 30,
         hengiomoinghay: formData.hengiomoinghay.trim() || ' ',
-        calotieuthukhoiluong: formData.calotieuthukhoiluong || 0,
-        cacbuoc: formData.cacbuoc.filter(step => step.trim()).length > 0 
-          ? formData.cacbuoc.filter(step => step.trim()) 
-          : [' '],
-        loiich: formData.loiich.filter(benefit => benefit.trim()).length > 0 
-          ? formData.loiich.filter(benefit => benefit.trim()) 
-          : [' '],
-        danhmuc: formData.danhmuc,
+        calo: formData.calotieuthukhoiluong || 0,
+        cacbuoc: formData.cacbuoc.filter(step => step.trim()).length > 0 ? formData.cacbuoc.filter(step => step.trim()) : [' '],
+        loiich: formData.loiich.filter(benefit => benefit.trim()).length > 0 ? formData.loiich.filter(benefit => benefit.trim()) : [' '],
+        danhmucID: formData.danhmuc, // Gửi ID của danh mục thay vì tên
         trangthai: 'chuahoanthanh',
         thongke: 0,
         ngaytao: new Date().toISOString(),
       };
 
-      // Set user ID based on account type
+      console.log('🔍 Selected category ID:', formData.danhmuc);
+      console.log('📋 Available categories:', categories);
+
+      //gán userID
       if (user.loai_tai_khoan === 'business') {
         if (user.additional_info?.vai_tro === 'nhanvien') {
           workoutData.nhanvienUserID = user._id;
@@ -201,8 +252,7 @@ export default function AddWorkoutScreen() {
       showAlert(    // su dung showalert vi alert chi hien thi mobile
         'Thành công',
         isEditMode ? 'Bài tập đã được cập nhật thành công!' : 'Bài tập đã được tạo thành công!',
-        () => { router.back();
-        }
+        () => router.back() 
       );
 
     } catch (error) {
@@ -311,29 +361,37 @@ export default function AddWorkoutScreen() {
                   onPress={() => setShowCategoryPicker(!showCategoryPicker)}
                 >
                   <Text style={styles.pickerButtonText}>
-                {categories.find(cat => cat.value === formData.danhmuc)?.label || 'Chọn danh mục'}
+                    {categories.find(cat => cat._id === formData.danhmuc)?.ten || 'Chọn danh mục'}
                   </Text>
                 </TouchableOpacity>
                 
                 {showCategoryPicker && (
                   <View style={styles.categoryDropdown}>
-                {categories.map((category) => (
-                  <TouchableOpacity
-                    key={category.value}
-                    style={styles.categoryOption}
-                    onPress={() => {
-                      updateFormData('danhmuc', category.value);
-                      setShowCategoryPicker(false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.categoryOptionText,
-                      formData.danhmuc === category.value && styles.categoryOptionSelected
-                    ]}>
-                      {category.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                    {categories.length > 0 ? (
+                      categories.map((category) => (
+                        <TouchableOpacity
+                          key={category._id}
+                          style={styles.categoryOption}
+                          onPress={() => {
+                            updateFormData('danhmuc', category._id);
+                            setShowCategoryPicker(false);
+                          }}
+                        >
+                          <Text style={[
+                            styles.categoryOptionText,
+                            formData.danhmuc === category._id && styles.categoryOptionSelected
+                          ]}>
+                            {category.ten}
+                          </Text>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <View style={styles.categoryOption}>
+                        <Text style={styles.categoryOptionText}>
+                          Không có danh mục nào
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
               </View>

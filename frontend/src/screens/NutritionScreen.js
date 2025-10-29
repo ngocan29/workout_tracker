@@ -1,19 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Modal,
-  TextInput,
-  Alert
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { Card, Title, Button } from 'react-native-paper';
 import ProgressBar from 'react-native-progress/Bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Navbar from '../components/ui/Navbar';
 import { Colors } from '../constants/Colors';
+import { NutritionService } from '../services/api';
+import { API_BASE_URL } from '../constants/api';
 
 export default function NutritionScreen({ isDarkMode, setDarkMode }) {
   const [showNutritionModal, setShowNutritionModal] = useState(false);
@@ -98,62 +91,123 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
 
   const checkNutritionData = async () => {
     try {
-      // Get user data and nutrition data from storage
       const userData = await AsyncStorage.getItem('userData');
-      const nutritionDataStr = await AsyncStorage.getItem('nutritionData');
-      const lastUpdateStr = await AsyncStorage.getItem('nutritionLastUpdate');
-      
       if (!userData) return;
+
+      const user = JSON.parse(userData);
       
-      const currentDate = new Date();
-      const currentMonth = currentDate.getMonth();
-      const currentYear = currentDate.getFullYear();
+      // Gọi API để lấy dữ liệu dinh dưỡng mới nhất
+      const response = await fetch(`${API_BASE_URL}/api/dinhduong?khachhangUserID=${user._id}`);
       
-      // Check if it's first day of new month
-      const isFirstDayOfMonth = currentDate.getDate() === 1;
-      
-      let shouldShowModal = false;
-      
-      if (!nutritionDataStr) {
-        // No nutrition data exists - first time
-        shouldShowModal = true;
-        setIsFirstTimeOrNewMonth(false);
-      } else if (lastUpdateStr) {
-        // Check if last update was in previous month
-        const lastUpdate = new Date(lastUpdateStr);
-        const lastUpdateMonth = lastUpdate.getMonth();
-        const lastUpdateYear = lastUpdate.getFullYear();
+      if (response.ok) {
+        const data = await response.json();
         
-        if (isFirstDayOfMonth && (lastUpdateMonth !== currentMonth || lastUpdateYear !== currentYear)) {
-          // First day of new month and hasn't updated this month
-          shouldShowModal = true;
-          setIsFirstTimeOrNewMonth(true);
+        const currentDate = new Date();
+        const isFirstDayOfMonth = currentDate.getDate() === 1;
+        
+        if (data) {
+          // Có dữ liệu - kiểm tra xem có phải đầu tháng không
+          const dataDate = new Date(data.ngaytao);
+          const isDifferentMonth = currentDate.getMonth() !== dataDate.getMonth() || 
+                                 currentDate.getFullYear() !== dataDate.getFullYear();
+          
+          // Hiển thị dữ liệu hiện tại
+          const displayData = {
+            ...data,
+            calories: data.calo || 0,
+          };
+          setNutritionData(displayData);
+          
+          // Nếu là đầu tháng và chưa có dữ liệu tháng này
+          if (isFirstDayOfMonth && isDifferentMonth) {
+            setIsFirstTimeOrNewMonth(true);
+            setShowNutritionModal(true);
+          } else {
+            setIsFirstTimeOrNewMonth(false);
+          }
+        } else {
+          // Lần đầu tiên - chưa có dữ liệu
+          setIsFirstTimeOrNewMonth(false);
+          setShowNutritionModal(true);
         }
+      } else {
+        // Lỗi API hoặc chưa có dữ liệu
+        setIsFirstTimeOrNewMonth(false);
+        setShowNutritionModal(true);
       }
-      
-      if (nutritionDataStr) {
-        setNutritionData(JSON.parse(nutritionDataStr));
-      }
-      
-      setShowNutritionModal(shouldShowModal);
     } catch (error) {
       console.error('Error checking nutrition data:', error);
+      // Lỗi - hiển thị form để nhập dữ liệu
+      setIsFirstTimeOrNewMonth(false);
+      setShowNutritionModal(true);
     }
   };
 
   const handleSaveNutritionData = async (data) => {
     try {
-      const currentDate = new Date().toISOString();
-      await AsyncStorage.setItem('nutritionData', JSON.stringify(data));
-      await AsyncStorage.setItem('nutritionLastUpdate', currentDate);
+      const userData = await AsyncStorage.getItem('userData');
+      if (!userData) {
+        Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
+        return;
+      }
+
+      const user = JSON.parse(userData);
       
-      setNutritionData(data);
-      setShowNutritionModal(false);
+      let response;
       
-      Alert.alert(
-        'Thành công', 
-        isFirstTimeOrNewMonth ? 'Đã cập nhật thông tin thể chất cho tháng mới!' : 'Đã lưu thông tin thể chất!'
-      );
+      if (isFirstTimeOrNewMonth && nutritionData && nutritionData._id) {
+        // Cập nhật hàng tháng (PUT)
+        response = await fetch(`${API_BASE_URL}/api/dinhduong/${nutritionData._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            chieucao: data.height,
+            cannang: data.weight,
+          }),
+        });
+      } else {
+        // Tạo mới lần đầu (POST)
+        response = await fetch(`${API_BASE_URL}/api/dinhduong`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            khachhangUserID: user._id,
+            userID: user._id,
+            chieucao: data.height,
+            cannang: data.weight,
+          }),
+        });
+      }
+
+      if (response.ok) {
+        const savedData = await response.json();
+        
+        // Tính toán calories hiển thị từ các macros
+        const displayData = {
+          ...savedData,
+          calories: savedData.calo || 0,
+        };
+        
+        // Lưu vào local storage và state
+        const currentDate = new Date().toISOString();
+        await AsyncStorage.setItem('nutritionData', JSON.stringify(displayData));
+        await AsyncStorage.setItem('nutritionLastUpdate', currentDate);
+        
+        setNutritionData(displayData);
+        setShowNutritionModal(false);
+        
+        Alert.alert(
+          'Thành công', 
+          isFirstTimeOrNewMonth ? 'Đã cập nhật thông tin thể chất cho tháng mới!' : 'Đã lưu thông tin thể chất!'
+        );
+      } else {
+        const errorData = await response.json();
+        Alert.alert('Lỗi', errorData.error || 'Có lỗi xảy ra khi lưu dữ liệu');
+      }
     } catch (error) {
       console.error('Error saving nutrition data:', error);
       Alert.alert('Lỗi', 'Có lỗi xảy ra khi lưu dữ liệu');
@@ -162,9 +216,13 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
 
   const mealData = [
     { meal: "Bữa Sáng", calories: 420, protein: 25, carbs: 45, fat: 18 },
+    { meal: "Bữa Trưa", calories: 630, protein: 40, carbs: 35, fat: 15 },
+    { meal: "Bữa Tối", calories: 500, protein: 45, carbs: 30, fat: 15 },
+    { meal: "Bữa Phụ", calories: 100, protein: 10, carbs: 6, fat: 10 },
+    
     // ... other meals
   ];
-
+  
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? Colors.darkBackground : Colors.background }]}>
       <Navbar isDarkMode={isDarkMode} setIsDarkMode={setDarkMode} />
@@ -174,24 +232,38 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
         <Card style={styles.summaryCard}>
           <Card.Content>
             <Title style={styles.summaryTitle}>Tổng Quan</Title>
-            <View style={styles.nutrientsGrid}>
-              <View style={styles.nutrientItem}>
-                <Text style={[styles.nutrientValue, { color: '#3b82f6' }]}>1,630</Text>
-                <Text style={styles.nutrientLabel}>Calo</Text>
+            {nutritionData ? (
+              <View style={styles.nutrientsGrid}>
+                <View style={styles.nutrientItem}>
+                  <Text style={[styles.nutrientValue, { color: '#3b82f6' }]}>
+                    {nutritionData.calories}
+                  </Text>
+                  <Text style={styles.nutrientLabel}>Calo</Text>
+                </View>
+                <View style={styles.nutrientItem}>
+                  <Text style={[styles.nutrientValue, { color: '#10b981' }]}>
+                    {nutritionData.protein}
+                  </Text>
+                  <Text style={styles.nutrientLabel}>Protein</Text>
+                </View>
+                <View style={styles.nutrientItem}>
+                  <Text style={[styles.nutrientValue, { color: '#f59e0b' }]}>
+                    {nutritionData.carbs}
+                  </Text>
+                  <Text style={styles.nutrientLabel}>Carbs</Text>
+                </View>
+                <View style={styles.nutrientItem}>
+                  <Text style={[styles.nutrientValue, { color: '#ef4444' }]}>
+                    {nutritionData.fat}
+                  </Text>
+                  <Text style={styles.nutrientLabel}>Fat</Text>
+                </View>
               </View>
-              <View style={styles.nutrientItem}>
-                <Text style={[styles.nutrientValue, { color: '#10b981' }]}>96g</Text>
-                <Text style={styles.nutrientLabel}>Protein</Text>
-              </View>
-              <View style={styles.nutrientItem}>
-                <Text style={[styles.nutrientValue, { color: '#f59e0b' }]}>160g</Text>
-                <Text style={styles.nutrientLabel}>Carbs</Text>
-              </View>
-              <View style={styles.nutrientItem}>
-                <Text style={[styles.nutrientValue, { color: '#ef4444' }]}>72g</Text>
-                <Text style={styles.nutrientLabel}>Fat</Text>
-              </View>
-            </View>
+            ) : (
+              <Text style={{ color: 'gray', textAlign: 'center' }}>
+                Chưa có dữ liệu dinh dưỡng — hãy nhập thông tin thể chất
+              </Text>
+            )}
           </Card.Content>
         </Card>
 
@@ -305,8 +377,8 @@ function NutritionDataModal({ visible, existingData, isUpdate, isDarkMode, onClo
   useEffect(() => {
     if (existingData) {
       setForm({
-        height: existingData.height || '',
-        weight: existingData.weight || ''
+        height: existingData.chieucao?.toString() || '',
+        weight: existingData.cannang?.toString() || ''
       });
     }
   }, [existingData]);
@@ -317,10 +389,8 @@ function NutritionDataModal({ visible, existingData, isUpdate, isDarkMode, onClo
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin chiều cao và cân nặng');
       return;
     }
-
     const nutritionData = {
-      height: form.height,
-      weight: form.weight,
+      ...form,
       createdAt: new Date().toISOString()
     };
 
@@ -346,6 +416,40 @@ function NutritionDataModal({ visible, existingData, isUpdate, isDarkMode, onClo
         </View>
 
         <View style={styles.modalContent}>
+          {/* Hiển thị thông tin cũ khi cập nhật */}
+          {isUpdate && existingData && (
+            <Card style={[styles.formSection, { 
+              backgroundColor: isDarkMode ? '#1a1a2e' : '#f0f9ff',
+              borderColor: isDarkMode ? Colors.darkBackground : '#bfdbfe',
+              marginBottom: 16
+            }]}>
+              <Card.Content>
+                <Text style={[styles.formSectionTitle, { 
+                  color: isDarkMode ? Colors.darkText : '#1e40af',
+                  marginBottom: 12
+                }]}>Thông Tin Tháng Trước</Text>
+                <View style={styles.inputRow}>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { 
+                      color: isDarkMode ? Colors.darkSecondary : '#6b7280' 
+                    }]}>Chiều cao cũ</Text>
+                    <Text style={[styles.oldValueText, { 
+                      color: isDarkMode ? Colors.darkText : Colors.black 
+                    }]}>{existingData.chieucao} cm</Text>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { 
+                      color: isDarkMode ? Colors.darkSecondary : '#6b7280' 
+                    }]}>Cân nặng cũ</Text>
+                    <Text style={[styles.oldValueText, { 
+                      color: isDarkMode ? Colors.darkText : Colors.black 
+                    }]}>{existingData.cannang} kg</Text>
+                  </View>
+                </View>
+              </Card.Content>
+            </Card>
+          )}
+
           {/* Basic Info */}
           <Card style={[styles.formSection, { 
             backgroundColor: isDarkMode ? Colors.darkSurface : 'white',
@@ -546,6 +650,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     marginTop: 8,
+  },
+  oldValueText: {
+    fontSize: 16,
+    fontWeight: '500',
+    padding: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
   },
   genderRow: {
     flexDirection: 'row',
