@@ -3,18 +3,51 @@ const router = express.Router();
 const Dinhduong = require('../models/DinhDuong');
 const User = require('../models/User');
 
-// GET: Lấy dinh dưỡng của khách hàng (mới nhất)
+// GET: Lấy dinh dưỡng - tất cả hoặc theo userID
 router.get('/', async (req, res) => {
   try {
-    const { khachhangUserID } = req.query;
-    if (!khachhangUserID) return res.status(400).json({ error: 'Thiếu khachhangUserID' });
-
-    const dinhduong = await Dinhduong.find({ khachhangUserID })
-      .sort({ ngaytao: -1 })
-      .limit(1);
-
-    res.json(dinhduong[0] || null);
+    console.log('🔍 GET /dinhduong called with query:', req.query);
+    
+    const { userID, all } = req.query;
+    
+    let query = {};
+    let options = {};
+    
+    if (userID) {
+      // Lấy theo userID cụ thể
+      query.userID = userID;
+      console.log('📋 Query with userID:', query);
+    }
+    
+    if (all === 'true') {
+      // Lấy tất cả data, sắp xếp từ mới nhất
+      options.sort = { ngaytao: -1 };
+      console.log('📊 Getting all records');
+    } else if (!userID) {
+      // Nếu không có userID và không có all=true, lấy 1 record mới nhất
+      options.sort = { ngaytao: -1 };
+      options.limit = 1;
+      console.log('📊 Getting latest 1 record (no userID)');
+    } else {
+      // Có userID nhưng không có all=true, lấy record mới nhất của user đó
+      options.sort = { ngaytao: -1 };
+      options.limit = 1;
+      console.log('📊 Getting latest 1 record for userID');
+    }
+    
+    console.log('🔍 Final query:', query, 'options:', options);
+    
+    const dinhduong = await Dinhduong.find(query, null, options);
+    console.log('✅ Found records:', dinhduong.length);
+    
+    // Nếu limit = 1, trả về object thay vì array
+    if (options.limit === 1) {
+      res.json(dinhduong[0] || null);
+    } else {
+      res.json(dinhduong);
+    }
   } catch (err) {
+    console.error('❌ GET error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -23,18 +56,17 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      khachhangUserID,
       userID,
       chieucao,
       cannang,
     } = req.body;
 
-    if (!khachhangUserID || !chieucao || !cannang) {
-      return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
+    if (!userID || !chieucao || !cannang) {
+      return res.status(400).json({ error: 'Thiếu thông tin bắt buộc (userID, chieucao, cannang)' });
     }
 
     // Lấy thông tin user để biết giới tính
-    const user = await User.findById(khachhangUserID);
+    const user = await User.findById(userID);
     if (!user) {
       return res.status(404).json({ error: 'Không tìm thấy user' });
     }
@@ -71,9 +103,9 @@ router.post('/', async (req, res) => {
     const fat = Math.round((calo * 0.30) / 9); // 30% calo từ fat (1g = 9 calo)
 
     const dinhduong = new Dinhduong({
-      khachhangUserID,
-      userID: userID || null,
+      userID: userID,
       chieucao: Number(chieucao),
+      cannang: Number(cannang),
       cannang: Number(cannang),
       luongnuoc: Number(luongnuoc.toFixed(2)),
       calo: Number(calo),
@@ -104,7 +136,7 @@ router.put('/:id', async (req, res) => {
     if (!dinhduong) return res.status(404).json({ error: 'Not found' });
 
     // Lấy thông tin user để biết giới tính
-    const user = await User.findById(dinhduong.khachhangUserID || dinhduong.userID);
+    const user = await User.findById(dinhduong.userID);
     if (!user) {
       return res.status(404).json({ error: 'Không tìm thấy user' });
     }

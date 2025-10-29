@@ -252,20 +252,20 @@ export const CategoryService = {
 // Nutrition Service - API cho dinh dưỡng
 export const NutritionService = {
   // Lấy thông tin dinh dưỡng của khách hàng (mới nhất)
-  getNutritionData: async (khachhangUserID) => {
-    console.log('🍎 Fetching nutrition data for user:', khachhangUserID);
-    return await apiCall(`${API_CONFIG.ENDPOINTS.NUTRITION}?khachhangUserID=${khachhangUserID}`, 'GET');
+  getNutritionData: async (userID) => {
+    console.log('🍎 Fetching nutrition data for user:', userID);
+    return await apiCall(`/dinhduong?userID=${userID}`, 'GET');
   },
 
   // Tạo thông tin dinh dưỡng mới (lần đầu tiên)
   createNutritionData: async (nutritionData) => {
     console.log('🌱 Creating nutrition data:', nutritionData);
-    return await apiCall(API_CONFIG.ENDPOINTS.NUTRITION_CREATE, 'POST', nutritionData);
+    return await apiCall('/dinhduong', 'POST', nutritionData);
   },
 
   // Cập nhật thông tin dinh dưỡng (hàng tháng)
   updateNutritionData: async (nutritionId, nutritionData) => {
     console.log('🔄 Updating nutrition data:', nutritionId, nutritionData);
-    return await apiCall(`${API_CONFIG.ENDPOINTS.NUTRITION_UPDATE}/${nutritionId}`, 'PUT', nutritionData);
+    return await apiCall(`/dinhduong/${nutritionId}`, 'PUT', nutritionData);
   },
 };

@@ -14,6 +14,7 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
   const [isFirstTimeOrNewMonth, setIsFirstTimeOrNewMonth] = useState(false);
   const [waterGlasses, setWaterGlasses] = useState(0);
   const [waterGoal] = useState(8); // Fixed goal of 8 glasses
+  const [waterPerGlass, setWaterPerGlass] = useState(250); // Default 250ml per glass
 
   // Check nutrition data on component mount
   useEffect(() => {
@@ -97,7 +98,7 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
       const user = JSON.parse(userData);
       
       // Gọi API để lấy dữ liệu dinh dưỡng mới nhất
-      const response = await fetch(`${API_BASE_URL}/api/dinhduong?khachhangUserID=${user._id}`);
+      const response = await fetch(`${API_BASE_URL}/dinhduong?userID=${user._id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -117,6 +118,13 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
             calories: data.calo || 0,
           };
           setNutritionData(displayData);
+
+          // Tính toán số ml mỗi cốc từ luongnuoc (chia cho 8 cốc)
+          if (data.luongnuoc) {
+            const mlPerGlass = Math.round((data.luongnuoc * 1000) / 8); // Convert L to ml, divide by 8
+            setWaterPerGlass(mlPerGlass);
+            console.log(`💧 Water calculation: ${data.luongnuoc}L total = ${mlPerGlass}ml per glass`);
+          }
           
           // Nếu là đầu tháng và chưa có dữ liệu tháng này
           if (isFirstDayOfMonth && isDifferentMonth) {
@@ -157,7 +165,7 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
       
       if (isFirstTimeOrNewMonth && nutritionData && nutritionData._id) {
         // Cập nhật hàng tháng (PUT)
-        response = await fetch(`${API_BASE_URL}/api/dinhduong/${nutritionData._id}`, {
+        response = await fetch(`${API_BASE_URL}/dinhduong/${nutritionData._id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -169,13 +177,12 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
         });
       } else {
         // Tạo mới lần đầu (POST)
-        response = await fetch(`${API_BASE_URL}/api/dinhduong`, {
+        response = await fetch(`${API_BASE_URL}/dinhduong`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            khachhangUserID: user._id,
             userID: user._id,
             chieucao: data.height,
             cannang: data.weight,
@@ -191,6 +198,13 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
           ...savedData,
           calories: savedData.calo || 0,
         };
+
+        // Cập nhật waterPerGlass từ luongnuoc mới
+        if (savedData.luongnuoc) {
+          const mlPerGlass = Math.round((savedData.luongnuoc * 1000) / 8);
+          setWaterPerGlass(mlPerGlass);
+          console.log(`💧 Updated water calculation: ${savedData.luongnuoc}L total = ${mlPerGlass}ml per glass`);
+        }
         
         // Lưu vào local storage và state
         const currentDate = new Date().toISOString();
@@ -289,9 +303,10 @@ export default function NutritionScreen({ isDarkMode, setDarkMode }) {
               <View style={styles.waterGlassDisplay}>
                 <Text style={styles.waterGlassText}>{waterGlasses} / {waterGoal}</Text>
                 <Text style={styles.waterGlassIcon}>🥛</Text>
+                <Text style={styles.waterGlassML}>({waterPerGlass}ml/cốc)</Text>
               </View>
               <Text style={{ color: '#3b82f6', fontSize: 14 }}>
-                {(waterGlasses * 0.25).toFixed(1)}L / {(waterGoal * 0.25).toFixed(1)}L
+                {((waterGlasses * waterPerGlass) / 1000).toFixed(1)}L / {((waterGoal * waterPerGlass) / 1000).toFixed(1)}L
               </Text>
             </View>
             <ProgressBar 
@@ -559,6 +574,12 @@ const styles = StyleSheet.create({
   },
   waterGlassIcon: {
     fontSize: 18,
+  },
+  waterGlassML: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginLeft: 4,
+    fontStyle: 'italic',
   },
   glassesRow: {
     flexDirection: 'row',

@@ -20,7 +20,7 @@ const dinhduongSchema = new mongoose.Schema({
 dinhduongSchema.pre('save', async function(next) {
   if (this.chieucao && this.cannang) {
     this.bmi = this.cannang / ((this.chieucao / 100) ** 2);
-    const user = await User.findById(this.userID || this.khachhangUserID);
+    const user = await User.findById(this.userID);
     if (user && user.gioitinh) {
       this.lbm = user.gioitinh === 'male'
         ? 0.407 * this.cannang + 0.267 * this.chieucao - 19.2
@@ -30,10 +30,9 @@ dinhduongSchema.pre('save', async function(next) {
   next();
 });
 
-dinhduongSchema.index({ khachhangUserID: 1 });
-dinhduongSchema.index({ ngaytao: 1 });
 dinhduongSchema.index({ userID: 1 });
-dinhduongSchema.index({ khachhangUserID: 1, ngaytao: -1 });
+dinhduongSchema.index({ ngaytao: 1 });
+dinhduongSchema.index({ userID: 1, ngaytao: -1 });
 dinhduongSchema.index({ bmi: 1 });
 
 module.exports = mongoose.model('Dinhduong', dinhduongSchema);
