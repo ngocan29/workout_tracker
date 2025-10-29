@@ -29,6 +29,7 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
   const isPersonal = userData?.loai_tai_khoan === 'personal';
   const isBusiness = userData?.loai_tai_khoan === 'business';
   const isEmployee = userData?.loai_tai_khoan === 'personal' && userData?.additional_info?.vai_tro === 'nhanvien';
+  const isCustomer = userData?.loai_tai_khoan === 'personal' && userData?.additional_info?.vai_tro === 'khachhang';
 
   // Fetch workouts của user hiện tại
   const fetchWorkouts = async () => {
@@ -120,11 +121,11 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
   useFocusEffect(
     useCallback(() => {
       fetchWorkouts();
-      // Chỉ fetch branch workouts cho non-personal users
-      if (!isPersonal) {
+      // Fetch branch workouts cho employee và customer
+      if (isEmployee || isCustomer) {
         fetchBranchWorkouts();
       }
-    }, [isPersonal])
+    }, [isEmployee, isCustomer])
   );
 
   const loadUserData = async () => {
@@ -143,7 +144,9 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
       // Lấy thông tin user
       const currentBranchId = userData?.additional_info?.chinhanhID || userData?.chinhanhID;
       const currentUserId = userData?._id;
-      const isPersonal = userData?.loai_tai_khoan === 'personal';
+      const isPersonal = userData?.loai_tai_khoan === 'personal' && !userData?.additional_info?.vai_tro; // Personal user thuần túy
+      const isEmployee = userData?.loai_tai_khoan === 'personal' && userData?.additional_info?.vai_tro === 'nhanvien';
+      const isCustomer = userData?.loai_tai_khoan === 'personal' && userData?.additional_info?.vai_tro === 'khachhang';
       
       console.log('🔍 fetchCategories - User data:', {
         userType: userData?.loai_tai_khoan,
@@ -155,15 +158,20 @@ export default function WorkoutScreen({ isDarkMode, setDarkMode }) {
       
       let result;
       
-      if (isPersonal) {
-        if (!currentUserId) {
-          console.error('❌ Personal user nhưng không có userID');
+      if (isPersonal || isEmployee || isCustomer) {
+        // Personal users, employees và customers lấy categories theo userID nếu có
+        // hoặc theo chinhanhID (cho employee/customer)
+        if (isPersonal && currentUserId) {
+          console.log('👤 Personal user - Fetching categories for user:', currentUserId);
+          result = await CategoryService.getCategories(null, currentUserId);
+        } else if ((isEmployee || isCustomer) && currentBranchId) {
+          console.log('� Employee/Customer - Fetching categories for branch:', currentBranchId);
+          result = await CategoryService.getCategories(currentBranchId, null);
+        } else {
+          console.error('❌ Missing required IDs for personal/employee/customer');
           setCategories([]);
           return;
         }
-        // Nếu user là personal, lấy categories theo userID
-        console.log('👤 Personal user - Fetching categories for user:', currentUserId);
-        result = await CategoryService.getCategories(null, currentUserId);
       } else {
         if (!currentBranchId) {
           console.error('❌ Business user nhưng không có chinhanhID');
@@ -332,9 +340,9 @@ const handleCategorySave = async () => {
     }
   };
 
-  // Check if user can manage categories
+  // Check if user can manage categories (chỉ business user được thêm/sửa/xóa)
   const canManageCategories = () => {
-    return userData && ['business', 'personal'].includes(userData.loai_tai_khoan);
+    return userData && userData.loai_tai_khoan === 'business';
   };
 
   // Filter workouts by selected category
@@ -558,8 +566,8 @@ const handleCategorySave = async () => {
           )}
         </View>
 
-        {/* Branch Workouts | Bài tập chi nhánh - Ẩn với personal user */}
-        {!isPersonal && (
+        /* Branch Workouts | Bài tập chi nhánh - Hiển thị cho Employee và Customer */
+        {(isEmployee || isCustomer) && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Title style={[styles.sectionTitle, { color: isDarkMode ? Colors.darkText : Colors.black }]}>
@@ -622,16 +630,18 @@ const handleCategorySave = async () => {
         )}
       </ScrollView>
       
-      {/* Category Form Modal */}
-      <CategoryFormModal
-        visible={showCategoryModal}
-        onClose={() => setShowCategoryModal(false)}
-        onSave={handleCategorySave}
-        editCategory={editingCategory}
-        isDarkMode={isDarkMode}
-        chinhanhID={userData?.loai_tai_khoan !== 'personal' ? (userData?.additional_info?.chinhanhID || userData?.chinhanhID) : null}
-        userID={userData?.loai_tai_khoan === 'personal' ? userData?._id : null}
-      />
+      {/* Category Form Modal - Chỉ business user mới có modal này */}
+      {userData?.loai_tai_khoan === 'business' && (
+        <CategoryFormModal
+          visible={showCategoryModal}
+          onClose={() => setShowCategoryModal(false)}
+          onSave={handleCategorySave}
+          editCategory={editingCategory}
+          isDarkMode={isDarkMode}
+          chinhanhID={userData?.additional_info?.chinhanhID || userData?.chinhanhID}
+          userID={null}
+        />
+      )}
     </TouchableOpacity>
   );
 }
